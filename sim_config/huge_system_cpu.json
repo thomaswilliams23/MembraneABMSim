@@ -22,17 +22,17 @@
     },
     "LPS": {
         "radius": 0.0345,
-        "arrival_rate": 0.5,
+        "arrival_rate": 0.25,
         "insertion_time": 1.0 
     },
     "init": {
-        "dim_x": 1.0,
-        "dim_y": 1.0,
-        "num_OmpA": 4,
-        "num_OmpCF": 2,
-        "num_LptD": 2,
-        "num_BamA": 2,
-        "num_LPS": 20,
+        "dim_x": 32.0,
+        "dim_y": 32.0,
+        "num_OmpA": 400,
+        "num_OmpCF": 200,
+        "num_LptD": 200,
+        "num_BamA": 200,
+        "num_LPS": 2000,
         "num_PP": 0,
         "method": "random",
         "equilibration_time": 10,
@@ -46,7 +46,7 @@
         "k_C": 0.5,
         "PP_arrival_rate": 0.5,
         "PP_bind_rate": 0.05,
-        "OMP_assembly_rate": 0.025
+        "OMP_assembly_rate": 0.0125
     },
     "force": {
         "temperature": 0,
@@ -64,9 +64,9 @@
         "density": 0.9,
         "dt": 0.001,
         "num_sub_timesteps": 10,
-        "t_max": 30,
+        "t_max": 100,
         "vis_dt": 0.1,
-        "output_dir": "TEST",
+        "output_dir": "TEST_huge_cpu",
         "seed": 1
     }
 }

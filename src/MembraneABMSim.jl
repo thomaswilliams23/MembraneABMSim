@@ -1,3 +1,5 @@
+
+
 module MembraneABMSim
 
     using Accessors
@@ -7,7 +9,9 @@ module MembraneABMSim
     using GeometryBasics
     using JLD2
     using JSON3
+    using KernelAbstractions
     using LinearAlgebra
+    using Metal
     using Morton
     using Printf
     using Random
@@ -19,11 +23,13 @@ module MembraneABMSim
     include("types/AgentTypes.jl")
     include("types/GridTypes.jl")
     include("types/SystemTypes.jl")
+    include("types/GPUTypes.jl")
     include("biology.jl")
     include("initialise.jl")
     include("file_io.jl")
     include("forces.jl")
     include("main.jl")
+    include("metal.jl")
     include("nascent.jl")
     include("sweep.jl")
     include("update_grid.jl")

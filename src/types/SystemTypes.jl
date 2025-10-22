@@ -4,15 +4,12 @@
 mutable struct AllAgentsFlat
     positions::Vector{Float64}
     next_positions::Vector{Float64}
-    effective_radii::Vector{Float64} 
-    actual_radii::Vector{Float64}  
-    is_OMP::Vector{Bool}
-    is_tethered::Vector{Bool}
+    effective_radii::Vector{Float64}
+    identifiers::Vector{Int}
     tether_points::Vector{Float64}
-    tether_lengths::Vector{Float64}
-    substrate_inserting_ixs::Vector{Int}
+    nascent_to_inserting_ixs::Vector{Int}
+    nascent_to_substrate_ixs::Vector{Int}
     substrate_inserting_ideal_dists::Vector{Float64}
-    successors::Vector{Int}
     agent_ix_to_sorted_ix::Vector{Int}
     sorted_ix_to_agent_ix::Vector{Int}
 end

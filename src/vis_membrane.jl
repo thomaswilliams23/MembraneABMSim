@@ -13,13 +13,13 @@ Output is a two element vector `overhang` such that
     `overhang[2]=-1` means the object lies over the bottom edge
     `overhang[2]=1` means the objects lies over the top edge
 """
-function compute_overhang(position::Vector{Float64}, radius::Float64, dims::SVector{2, Float64}) :: Vector{Int}
+function compute_overhang(position::SVector{2, Float64}, radius::Float64, dims::SVector{2, Float64}) :: SVector{2, Int}
     overhang_l = (position[1] < radius)
     overhang_r = ((dims[1]-position[1]) < radius)
     overhang_b = (position[2] < radius)
     overhang_t = ((dims[2]-position[2]) < radius)
 
-    return [-overhang_l + overhang_r, -overhang_b + overhang_t]
+    return SVector{2, Int}(-overhang_l + overhang_r, -overhang_b + overhang_t)
 end
 
 
@@ -98,7 +98,7 @@ function build_plot_objects(agents::AllAgents, dims::SVector{2, Float64}, max_di
         push!(tether_end_y_coords, shifted_tether_end_y_coord)
     end
 
-    function _push_overhang_agent_data!(overhang::Vector{Int}, x_coord::Float64, y_coord::Float64, agent_radius::Float64, 
+    function _push_overhang_agent_data!(overhang::SVector{2, Int}, x_coord::Float64, y_coord::Float64, agent_radius::Float64, 
                                         agent_colour::RGBA{Float64}, insertion_state::String)
         #count num overhangs
         num_overhangs = (overhang[1]!=0) + (overhang[2]!=0)
@@ -119,7 +119,7 @@ function build_plot_objects(agents::AllAgents, dims::SVector{2, Float64}, max_di
         end
     end
 
-    function _push_overhang_tether_data!(overhang::Vector{Int}, tether_x_coord::Float64, tether_y_coord::Float64, 
+    function _push_overhang_tether_data!(overhang::SVector{2, Int}, tether_x_coord::Float64, tether_y_coord::Float64, 
                                          tether_end_x_coord::Float64, tether_end_y_coord::Float64)
         #count number overhangs
         num_overhangs = (overhang[1]!=0) + (overhang[2]!=0)
@@ -274,7 +274,7 @@ function make_membrane_movie(out_path::String)
     movie_path = joinpath("out", out_path, "sim.mp4")
 
     #loop over each output data file and generate a snapshot for the movie
-    record(fig, movie_path, 1:2988) do time_ix
+    record(fig, movie_path, 1:num_time_steps) do time_ix
 
         print("Rendering frame $time_ix of $num_time_steps\r")
         

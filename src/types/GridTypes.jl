@@ -3,8 +3,6 @@
 
 mutable struct SimCell
     cell_z_ix::Int
-    start_agent::Union{Int, Nothing}
-    num_agents::Int
     agent_ixs::Vector{Int}
 end
 
@@ -13,7 +11,10 @@ mutable struct SimGrid
     num_cells::SVector{2, Int}
     num_agents::Int
     coords_to_z_ix::Vector{Int}
-    z_ix_to_coords::Vector{Tuple{Int,Int}}
+    z_ix_to_coords::Vector{Int}
     agent_cell_z_ixs::Vector{Int}
+    num_agents_in_cell::Vector{Int}
+    start_agents_in_cell::Vector{Int}
     cells::Vector{SimCell}
+    has_changed::Bool
 end

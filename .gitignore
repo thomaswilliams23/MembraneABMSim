@@ -1,0 +1,9 @@
+#ignore machine output
+.DS_Store
+out/*
+
+#ignore local test files
+TMP_*.jl
+
+#ignore vscode settings
+.vscode/

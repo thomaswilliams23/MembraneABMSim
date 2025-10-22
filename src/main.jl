@@ -1,29 +1,4 @@
 
-# using Accessors
-# using Distributions
-# using JLD2
-# using JSON3
-# using LinearAlgebra
-# using Morton
-# using Printf
-# using Random
-# using StaticArrays
-# using StatsBase
-# using StructTypes
-
-# include("types/ParamTypes.jl")
-# include("types/AgentTypes.jl")
-# include("types/GridTypes.jl")
-# include("types/SystemTypes.jl")
-# include("biology.jl")
-# include("initialise.jl")
-# include("file_io.jl")
-# include("forces.jl")
-# include("nascent.jl")
-# include("sweep.jl")
-# include("update_grid.jl")
-# include("utils.jl")
-
 
 """
     run_sim(config_pathname::String)
@@ -43,9 +18,35 @@ function run_sim(config_pathname::String)
         Random.seed!(params.system.seed)
     end
 
+    #determine device to use
+    device = "cpu"
+    if params.system.device == "metal"
+        println("Running on Metal GPU")
+        device = "metal"
+    else
+        if !isnothing(params.system.device)
+            error("Device type $(params.system.device) not recognised")
+        end
+    end
+
+    #build nascent added area lookup for speed
+    nascent_added_area_lookup = build_nascent_added_area_lookup(params)
+
     #intialise the system
     t=0.0
-    agents, grid, system_flat, nascent_added_area_lookup = initialise_system(params)
+    if device=="cpu"
+        agents, grid, system_flat_cpu = initialise_system_cpu(params)
+    elseif device=="metal"
+        (
+            force_kernel,
+            agents, 
+            grid, 
+            system_flat_cpu, 
+            all_data_metal, 
+            grid_metal,
+            params_metal
+        ) = initialise_system_metal(params)
+    end
 
 
     #write out initial state
@@ -58,7 +59,7 @@ function run_sim(config_pathname::String)
     while t<params.system.t_max - time_err
 
         #update BAM subsystem
-        update_BAM_subsystem!(agents, grid, system_flat, params, t)
+        update_BAM_subsystem!(agents, grid, system_flat_cpu, params, t)
 
         #update Lpt subsystem
         update_Lpt_subsystem!(agents, grid, params, t)
@@ -77,10 +78,16 @@ function run_sim(config_pathname::String)
 
         #update the grid and flat system data
         rebuild_grid!(grid, agents, params.force.sensing_radius)
-        compile_flat_system_data!(system_flat, agents, grid, params)
+        compile_flat_system_data_cpu!(system_flat_cpu, agents, grid, params)
+        put_grid_in_sorted_order!(grid, system_flat_cpu)
 
         #resolve inter-agent forces
-        resolve_forces!(agents, grid, system_flat, params)
+        if device=="cpu"
+            resolve_forces_cpu!(agents, grid, system_flat_cpu, params)
+        elseif device=="metal"
+            copy_data_to_metal!(all_data_metal, grid_metal, system_flat_cpu, grid)
+            resolve_forces_metal!(force_kernel, agents, system_flat_cpu, all_data_metal, grid_metal, params_metal)
+        end
 
         #step time
         t += params.system.dt
@@ -131,7 +138,7 @@ function run_sweep(sweep_config_pathname::String)
         end
 
         #run the sim
-        #run_sim(config_fname)
+        run_sim(config_fname)
     end
 
 end

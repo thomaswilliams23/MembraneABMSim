@@ -1,22 +1,18 @@
 
 
 """
-    resolve_forces!(grid::SimGrid, agents::AllAgents, params::AllParams)
+    resolve_forces_cpu!(grid::SimGrid, agents::AllAgents, params::AllParams)
 
 Top level function to resolve forces on all agents in the system. Runs with multi-threading by
 default, GPU acceleration to be implemented.
 """
-function resolve_forces!(agents::AllAgents, grid::SimGrid, system_flat::AllAgentsFlat, params::AllParams)
-
-    #TODO: implement GPU version of this operation
+function resolve_forces_cpu!(agents::AllAgents, grid::SimGrid, system_flat::AllAgentsFlat, params::AllParams)
     
     # write new positions vector (iteration order keeps nearby agents together)
-    Threads.@threads for agent_ix = 1:grid.num_agents
-        sorted_ix = system_flat.agent_ix_to_sorted_ix[agent_ix]
+    Threads.@threads for sorted_ix = 1:grid.num_agents
         next_position_this_agent = compute_next_position(
-            agent_ix,
+            sorted_ix,
             system_flat,
-            system_flat.substrate_inserting_ixs[sorted_ix],
             grid,
             params
         )
@@ -40,252 +36,311 @@ end
 
 
 """
-    compile_flat_system_data!(system_flat::AllAgentsFlat, agents::AllAgents, grid::SimGrid, params::AllParams)
+    compile_flat_system_data_cpu!(system_flat::AllAgentsFlat, agents::AllAgents, grid::SimGrid, params::AllParams)
 
 Rebuilds the system_flat (`AllAgentsFlat`) structure used for force calculations. Data is read in
 by traversing grid cells in Morton z order for efficiency.
 """
-function compile_flat_system_data!(system_flat::AllAgentsFlat, agents::AllAgents, grid::SimGrid, params::AllParams)
-
-    #build the successors and sorted_ixs vectors from scratch:
-
-    #allocate memory
-    successors = zeros(Int, grid.num_agents)
-    agent_ix_to_sorted_ix = zeros(Int, grid.num_agents)
-    sorted_ix_to_agent_ix = zeros(Int, grid.num_agents)
-
-    #traverse grid in Morton z order to populate successors vector and sorted-unsorted ix maps
-    this_agent_ix = 0
-    next_agent_ix = 0
-    first_agent = 0
-    found_second_agent=false
-    sorted_ix = 1
-    for cell_z_ix=1:prod(grid.num_cells)
-        cell = grid.cells[cell_z_ix]
-        for local_ix = 1:cell.num_agents
-            next_agent_ix = cell.agent_ixs[local_ix]
-            if found_second_agent
-                successors[this_agent_ix] = next_agent_ix
-            else
-                first_agent = next_agent_ix
-                found_second_agent = true
-            end
-            this_agent_ix = next_agent_ix
-            agent_ix_to_sorted_ix[this_agent_ix] = sorted_ix
-            sorted_ix_to_agent_ix[sorted_ix] = this_agent_ix
-            sorted_ix += 1
-        end
-    end
-    successors[this_agent_ix] = first_agent
-
-    #put in flat structure
-    system_flat.successors = successors
-    system_flat.sorted_ix_to_agent_ix = sorted_ix_to_agent_ix
-    system_flat.agent_ix_to_sorted_ix = agent_ix_to_sorted_ix
-
-    #build data vectors:
-    #TODO: actual and effective radii are almost always exactly the same (unless you have a large nascent OMP), can this be streamlined a bit?
+function compile_flat_system_data_cpu!(system_flat::AllAgentsFlat, agents::AllAgents, grid::SimGrid, params::AllParams)
 
     #first, if there are any new agents, check the existing vectors are long enough
-    curr_vec_capacity = length(system_flat.effective_radii)
+    curr_vec_capacity = length(system_flat.identifiers)
     if grid.num_agents>curr_vec_capacity
         size_increase_ratio = 1.25
         new_vec_size = ceil(Int, size_increase_ratio*curr_vec_capacity)
         resize!(system_flat.positions, 2*new_vec_size)
         resize!(system_flat.next_positions, 2*new_vec_size)
-        resize!(system_flat.effective_radii, new_vec_size)
-        resize!(system_flat.actual_radii, new_vec_size)
-        resize!(system_flat.is_OMP, new_vec_size)
-        resize!(system_flat.is_tethered, new_vec_size)
-        resize!(system_flat.tether_lengths, new_vec_size)
         resize!(system_flat.tether_points, 2*new_vec_size)
-        resize!(system_flat.substrate_inserting_ixs, new_vec_size)
-        resize!(system_flat.substrate_inserting_ideal_dists, new_vec_size)
+        resize!(system_flat.effective_radii, new_vec_size)
+        resize!(system_flat.identifiers, new_vec_size)
+        resize!(system_flat.agent_ix_to_sorted_ix, new_vec_size)
+        resize!(system_flat.sorted_ix_to_agent_ix, new_vec_size)
     end
 
+
+    #build the sorted_ixs vectors:
+
+    #traverse grid in Morton z order to populate sorted-unsorted ix maps
+    sorted_ix = 1
+    for cell_z_ix=1:prod(grid.num_cells)
+        cell = grid.cells[cell_z_ix]
+        for local_ix = 1:grid.num_agents_in_cell[cell_z_ix]
+            this_agent_ix = cell.agent_ixs[local_ix]
+            system_flat.agent_ix_to_sorted_ix[this_agent_ix] = sorted_ix
+            system_flat.sorted_ix_to_agent_ix[sorted_ix] = this_agent_ix
+            sorted_ix += 1
+        end
+    end
+
+
+    #build data vectors:
+
     #loop through all the agents and populate vectors (janky for SPEED)
+    inserting_ix_counter = 1
+    nascent_ix_counter = 1
     untethered_val = 0.0
-    no_substrate_insertion_dist_val = 0.0
-    no_substrate_insertion_ix_val = -1
     for agent in agents.OMP.OmpA
 
-        sorted_ix = agent_ix_to_sorted_ix[agent.index]
+        sorted_ix = system_flat.agent_ix_to_sorted_ix[agent.index]
 
         system_flat.positions[2*sorted_ix-1] = agent.position[1]
         system_flat.positions[2*sorted_ix] = agent.position[2]
-        system_flat.effective_radii[sorted_ix] = params.OmpA.radius
-        system_flat.actual_radii[sorted_ix] = params.OmpA.radius
-        system_flat.is_OMP[sorted_ix] = true
-        system_flat.is_tethered[sorted_ix] = agent.is_tethered
-        system_flat.tether_lengths[sorted_ix] = params.OmpA.tether_radius
         system_flat.tether_points[2*sorted_ix-1] = agent.tether_point[1]
         system_flat.tether_points[2*sorted_ix] = agent.tether_point[2]
-        system_flat.substrate_inserting_ixs[sorted_ix] = no_substrate_insertion_ix_val
-        system_flat.substrate_inserting_ideal_dists[sorted_ix] = no_substrate_insertion_dist_val
+        system_flat.effective_radii[sorted_ix] = params.OmpA.radius
+        system_flat.identifiers[sorted_ix] = make_identifier(;
+            is_tethered=agent.is_tethered, 
+            agent_type="OmpA", 
+            is_inserting=false, 
+            is_nascent=false, 
+            nascent_ix=0
+        )
     end
     for agent in agents.OMP.OmpCF
 
-        sorted_ix = agent_ix_to_sorted_ix[agent.index]
+        sorted_ix = system_flat.agent_ix_to_sorted_ix[agent.index]
 
         system_flat.positions[2*sorted_ix-1] = agent.position[1]
         system_flat.positions[2*sorted_ix] = agent.position[2]
-        system_flat.effective_radii[sorted_ix] = params.OmpCF.radius
-        system_flat.actual_radii[sorted_ix] = params.OmpCF.radius
-        system_flat.is_OMP[sorted_ix] = true
-        system_flat.is_tethered[sorted_ix] = false
-        system_flat.tether_lengths[sorted_ix] = untethered_val
         system_flat.tether_points[2*sorted_ix-1] = untethered_val
         system_flat.tether_points[2*sorted_ix] = untethered_val
-        system_flat.substrate_inserting_ixs[sorted_ix] = no_substrate_insertion_ix_val
-        system_flat.substrate_inserting_ideal_dists[sorted_ix] = no_substrate_insertion_dist_val
+        system_flat.effective_radii[sorted_ix] = params.OmpCF.radius
+        system_flat.identifiers[sorted_ix] = make_identifier(;
+            is_tethered=false, 
+            agent_type="OmpCF", 
+            is_inserting=false, 
+            is_nascent=false, 
+            nascent_ix=0
+        )
     end
     for agent in agents.OMP.BamA
 
-        sorted_ix = agent_ix_to_sorted_ix[agent.index]
+        sorted_ix = system_flat.agent_ix_to_sorted_ix[agent.index]
 
         system_flat.positions[2*sorted_ix-1] = agent.position[1]
         system_flat.positions[2*sorted_ix] = agent.position[2]
-        system_flat.effective_radii[sorted_ix] = params.BamA.radius
-        system_flat.actual_radii[sorted_ix] = params.BamA.radius
-        system_flat.is_OMP[sorted_ix] = true
-        system_flat.is_tethered[sorted_ix] = false
-        system_flat.tether_lengths[sorted_ix] = untethered_val
         system_flat.tether_points[2*sorted_ix-1] = untethered_val
         system_flat.tether_points[2*sorted_ix] = untethered_val
-        system_flat.substrate_inserting_ixs[sorted_ix] = no_substrate_insertion_ix_val
-        system_flat.substrate_inserting_ideal_dists[sorted_ix] = no_substrate_insertion_dist_val
+        system_flat.effective_radii[sorted_ix] = params.BamA.radius
+        if agent.insertion_state == "free"
+            system_flat.identifiers[sorted_ix] = make_identifier(;
+                is_tethered=false, 
+                agent_type="BamA", 
+                is_inserting=false, 
+                is_nascent=false, 
+                nascent_ix=0
+            )
+        else
+            system_flat.identifiers[sorted_ix] = make_identifier(;
+                is_tethered=false, 
+                agent_type="BamA", 
+                is_inserting=true, 
+                is_nascent=false, 
+                nascent_ix=inserting_ix_counter
+            )
+            inserting_ix_counter += 1
+        end
     end
     for agent in agents.OMP.LptD
 
-        sorted_ix = agent_ix_to_sorted_ix[agent.index]
+        sorted_ix = system_flat.agent_ix_to_sorted_ix[agent.index]
 
         system_flat.positions[2*sorted_ix-1] = agent.position[1]
         system_flat.positions[2*sorted_ix] = agent.position[2]
-        system_flat.effective_radii[sorted_ix] = params.LptD.radius
-        system_flat.actual_radii[sorted_ix] = params.LptD.radius
-        system_flat.is_OMP[sorted_ix] = true
-        system_flat.is_tethered[sorted_ix] = agent.is_tethered
-        system_flat.tether_lengths[sorted_ix] = params.LptD.tether_radius
         system_flat.tether_points[2*sorted_ix-1] = agent.tether_point[1]
         system_flat.tether_points[2*sorted_ix] = agent.tether_point[2]
-        system_flat.substrate_inserting_ixs[sorted_ix] = no_substrate_insertion_ix_val
-        system_flat.substrate_inserting_ideal_dists[sorted_ix] = no_substrate_insertion_dist_val
+        system_flat.effective_radii[sorted_ix] = params.LptD.radius
+        if agent.insertion_state == "free"
+            system_flat.identifiers[sorted_ix] = make_identifier(;
+                is_tethered=agent.is_tethered, 
+                agent_type="LptD", 
+                is_inserting=false, 
+                is_nascent=false, 
+                nascent_ix=0
+            )
+        else
+            system_flat.identifiers[sorted_ix] = make_identifier(;
+                is_tethered=agent.is_tethered, 
+                agent_type="LptD", 
+                is_inserting=true, 
+                is_nascent=false, 
+                nascent_ix=inserting_ix_counter
+            )
+            inserting_ix_counter += 1
+        end
     end
     for agent in agents.LPS
 
-        sorted_ix = agent_ix_to_sorted_ix[agent.index]
+        sorted_ix = system_flat.agent_ix_to_sorted_ix[agent.index]
 
         system_flat.positions[2*sorted_ix-1] = agent.position[1]
         system_flat.positions[2*sorted_ix] = agent.position[2]
-        system_flat.effective_radii[sorted_ix] = params.LPS.radius
-        system_flat.actual_radii[sorted_ix] = params.LPS.radius
-        system_flat.is_OMP[sorted_ix] = false
-        system_flat.is_tethered[sorted_ix] = false
-        system_flat.tether_lengths[sorted_ix] = untethered_val
         system_flat.tether_points[2*sorted_ix-1] = untethered_val
         system_flat.tether_points[2*sorted_ix] = untethered_val
-        system_flat.substrate_inserting_ixs[sorted_ix] = no_substrate_insertion_ix_val
-        system_flat.substrate_inserting_ideal_dists[sorted_ix] = no_substrate_insertion_dist_val
+        system_flat.effective_radii[sorted_ix] = params.LPS.radius
+        system_flat.identifiers[sorted_ix] = make_identifier(;
+            is_tethered=false, 
+            agent_type="LPS", 
+            is_inserting=false, 
+            is_nascent=false, 
+            nascent_ix=0
+        )
     end
     for agent in agents.nascent.nascent_OMP
 
-        sorted_ix = agent_ix_to_sorted_ix[agent.index]
+        sorted_ix = system_flat.agent_ix_to_sorted_ix[agent.index]
 
         system_flat.positions[2*sorted_ix-1] = agent.position[1]
         system_flat.positions[2*sorted_ix] = agent.position[2]
-        system_flat.effective_radii[sorted_ix] = agent.effective_radius
-        #have to case-match OMP type, but there aren't many nascent objects so it's fine
-        if agent.OMP_type == "OmpA"
-            system_flat.actual_radii[sorted_ix] = params.OmpA.radius
-        elseif agent.OMP_type == "OmpCF"
-            system_flat.actual_radii[sorted_ix] = params.OmpCF.radius
-        elseif agent.OMP_type == "BamA"
-            system_flat.actual_radii[sorted_ix] = params.BamA.radius
-        elseif agent.OMP_type == "LptD"
-            system_flat.actual_radii[sorted_ix] = params.LptD.radius
-        else
-            error("Unknown nascent OMP type $(agent.OMP_type)")
-        end
-        system_flat.is_OMP[sorted_ix] = true
-        system_flat.is_tethered[sorted_ix] = false
-        system_flat.tether_lengths[sorted_ix] = untethered_val
         system_flat.tether_points[2*sorted_ix-1] = untethered_val
         system_flat.tether_points[2*sorted_ix] = untethered_val
+        system_flat.effective_radii[sorted_ix] = agent.effective_radius
+        system_flat.identifiers[sorted_ix] = make_identifier(;
+            is_tethered=false, 
+            agent_type=agent.OMP_type, 
+            is_inserting=false, 
+            is_nascent=true, 
+            nascent_ix=nascent_ix_counter
+        )
 
-        #put in associated inserting agent and vice versa
-        inserting_agent_index = agent.inserting_agent_index
-        system_flat.substrate_inserting_ixs[sorted_ix] = inserting_agent_index
-        system_flat.substrate_inserting_ideal_dists[sorted_ix] = agent.ideal_dist_from_inserting_agent
-        inserting_agent_sorted_index = agent_ix_to_sorted_ix[inserting_agent_index]
-        system_flat.substrate_inserting_ixs[inserting_agent_sorted_index] = agent.index
-        system_flat.substrate_inserting_ideal_dists[inserting_agent_sorted_index] = agent.ideal_dist_from_inserting_agent
+        #make identifier for the inserting agent too
+        inserting_agent_sorted_index = system_flat.agent_ix_to_sorted_ix[agent.inserting_agent_index]
+        system_flat.identifiers[inserting_agent_sorted_index] = make_identifier(;
+            is_tethered=false, 
+            agent_type="BamA",
+            is_inserting=true, 
+            is_nascent=false, 
+            nascent_ix=nascent_ix_counter
+        )
+
+        #add to inserting-substrate mappings
+        system_flat.nascent_to_substrate_ixs[nascent_ix_counter] = sorted_ix
+        system_flat.nascent_to_inserting_ixs[nascent_ix_counter] = inserting_agent_sorted_index
+        system_flat.substrate_inserting_ideal_dists[nascent_ix_counter] = agent.ideal_dist_from_inserting_agent
+        nascent_ix_counter += 1
     end
     for agent in agents.nascent.nascent_LPS
-
-        sorted_ix = agent_ix_to_sorted_ix[agent.index]
+    
+        sorted_ix = system_flat.agent_ix_to_sorted_ix[agent.index]
 
         system_flat.positions[2*sorted_ix-1] = agent.position[1]
         system_flat.positions[2*sorted_ix] = agent.position[2]
-        system_flat.effective_radii[sorted_ix] = params.LPS.radius
-        system_flat.actual_radii[sorted_ix] = params.LPS.radius
-        system_flat.is_OMP[sorted_ix] = false
-        system_flat.is_tethered[sorted_ix] = false
-        system_flat.tether_lengths[sorted_ix] = untethered_val
         system_flat.tether_points[2*sorted_ix-1] = untethered_val
         system_flat.tether_points[2*sorted_ix] = untethered_val
+        system_flat.effective_radii[sorted_ix] = params.LPS.radius
+        system_flat.identifiers[sorted_ix] = make_identifier(;
+            is_tethered=false, 
+            agent_type="LPS", 
+            is_inserting=false, 
+            is_nascent=true, 
+            nascent_ix=nascent_ix_counter
+        )
 
-        #put in associated inserting agent and vice versa
-        inserting_agent_index = agent.inserting_agent_index
-        system_flat.substrate_inserting_ixs[sorted_ix] = inserting_agent_index
-        system_flat.substrate_inserting_ideal_dists[sorted_ix] = agent.ideal_dist_from_inserting_agent
-        inserting_agent_sorted_index = agent_ix_to_sorted_ix[inserting_agent_index]
-        system_flat.substrate_inserting_ixs[inserting_agent_sorted_index] = agent.index
-        system_flat.substrate_inserting_ideal_dists[inserting_agent_sorted_index] = agent.ideal_dist_from_inserting_agent
+        #make identifier for the inserting agent too
+        inserting_agent_sorted_index = system_flat.agent_ix_to_sorted_ix[agent.inserting_agent_index]
+        if system_flat.identifiers[inserting_agent_sorted_index] < 0
+            inserting_agent_tethered = true
+        else
+            inserting_agent_tethered = false
+        end
+        system_flat.identifiers[inserting_agent_sorted_index] = make_identifier(;
+            is_tethered=inserting_agent_tethered, 
+            agent_type="LPS",
+            is_inserting=true, 
+            is_nascent=false, 
+            nascent_ix=nascent_ix_counter
+        )
+
+        #add to inserting-substrate mappings
+        system_flat.nascent_to_substrate_ixs[nascent_ix_counter] = sorted_ix
+        system_flat.nascent_to_inserting_ixs[nascent_ix_counter] = inserting_agent_sorted_index
+        system_flat.substrate_inserting_ideal_dists[nascent_ix_counter] = agent.ideal_dist_from_inserting_agent
+
+        nascent_ix_counter += 1
     end
 
 end
 
 
 """
-    compute_next_position(agent_ix::Int, system_flat::AllAgentsFlat, substrate_inserting_ix::Int, grid::SimGrid, params::AllParams)
+    compute_next_position(sorted_ix::Int, system_flat::AllAgentsFlat, grid::SimGrid, params::AllParams)
 
 Computes the next position of a specified agent after tallying attraction-repulsion forces and 
 inserting-substrate forces (if this agent is not inserting something or is being inserted - denoted
 by `substrate_inserting_ix` being negative). Returns the next position as a 2-element vector.
 """
-function compute_next_position(agent_ix::Int, system_flat::AllAgentsFlat, substrate_inserting_ix::Int, grid::SimGrid, params::AllParams)
+function compute_next_position(sorted_ix::Int, system_flat::AllAgentsFlat, grid::SimGrid, params::AllParams)
 
-    #get sorted ix
-    sorted_ix = system_flat.agent_ix_to_sorted_ix[agent_ix]
+    #parse this agent's identifier
+    identifier = system_flat.identifiers[sorted_ix]
+    is_tethered, agent_type, is_nascent, is_inserting, nascent_ix = parse_identifier(identifier)
+
+    #if inserting or nascent, get the substrate/inserting ix so we can ignore it in attraction/repulsion force calculations
+    if is_inserting
+        sorted_substrate_inserting_ix = system_flat.nascent_to_substrate_ixs[nascent_ix]
+    elseif is_nascent
+        sorted_substrate_inserting_ix = system_flat.nascent_to_inserting_ixs[nascent_ix]
+    else
+        sorted_substrate_inserting_ix = -1
+    end
 
     #tally forces acting on this agent (ignore substrate/inserting agent, if one exists)
-    resultant_force = tally_attr_rep_forces(agent_ix, substrate_inserting_ix, grid, system_flat, params)
+    resultant_force = tally_attr_rep_forces(sorted_ix, sorted_substrate_inserting_ix, grid, system_flat, params)
 
     #if this agent has a substrate/inserting agent, compute the spring force between them
-    if substrate_inserting_ix>0
-        sorted_n_ix = system_flat.agent_ix_to_sorted_ix[substrate_inserting_ix]
-        agent_pos = SVector{2, Float64}(system_flat.positions[sorted_ix*2-1], system_flat.positions[sorted_ix*2])
-        neigh_pos = SVector{2, Float64}(system_flat.positions[sorted_n_ix*2-1], system_flat.positions[sorted_n_ix*2])
+    if sorted_substrate_inserting_ix>0
+        agent_pos = SVector{2, Float64}(
+            system_flat.positions[sorted_ix*2-1], 
+            system_flat.positions[sorted_ix*2]
+        )
+        neigh_pos = SVector{2, Float64}(
+            system_flat.positions[sorted_substrate_inserting_ix*2-1], 
+            system_flat.positions[sorted_substrate_inserting_ix*2]
+        )
         resultant_force += compute_inserting_substrate_force(
             agent_pos,
             neigh_pos,
             grid.dims,
-            system_flat.substrate_inserting_ideal_dists[sorted_ix],
+            system_flat.substrate_inserting_ideal_dists[nascent_ix],
             params.insertion.mu_attr,
             params.insertion.mu_rep,
             params.insertion.k_C
         )
     end
 
+    #get actual radius
+    if is_nascent && agent_type != "LPS"
+        if agent_type == "OmpA"
+            act_rad = params.OmpA.radius
+        elseif agent_type == "OmpCF"
+            act_rad = params.OmpCF.radius
+        elseif agent_type == "BamA"
+            act_rad = params.BamA.radius
+        elseif agent_type == "LptD"
+            act_rad = params.LptD.radius
+        else
+            error("Unknown agent type '$agent_type' encountered when getting actual radius for nascent agent.")
+        end
+    else
+        act_rad = system_flat.effective_radii[sorted_ix]
+    end
+
     #compute proposal position from force sum
     agent_pos = SVector{2, Float64}(system_flat.positions[2*sorted_ix-1], system_flat.positions[2*sorted_ix])
-    next_pos = agent_pos + (params.system.dt/(params.force.eta*system_flat.actual_radii[sorted_ix]))*resultant_force
+    next_pos = agent_pos + (params.system.dt/(params.force.eta*act_rad))*resultant_force
     next_pos = mod.(next_pos, grid.dims)
 
     #check if agent has a tether and if proposal position exceeds tether length
-    if system_flat.is_tethered[sorted_ix]
+    if is_tethered
         tether_pos = SVector{2, Float64}(system_flat.tether_points[2*sorted_ix-1], system_flat.tether_points[2*sorted_ix])
-        if shortest_distance(next_pos, tether_pos, grid.dims)>system_flat.tether_lengths[sorted_ix]
+        if agent_type == "OmpA"
+            tether_length = params.OmpA.tether_radius
+        elseif agent_type == "LptD"
+            tether_length = params.LptD.tether_radius
+        else
+            error("Tethered agent of type '$agent_type' not supported.")
+        end
+        if shortest_distance(next_pos, tether_pos, grid.dims)>tether_length
             #make next position same as old position
             next_pos = SVector{2, Float64}(system_flat.positions[2*sorted_ix-1], system_flat.positions[2*sorted_ix])
         end
@@ -297,25 +352,23 @@ end
 
 
 """
-    tally_attr_rep_forces(agent_ix::Int, substrate_inserting_ix::Int, grid::SimGrid, system_flat::AllAgentsFlat, params::AllParams)
+    tally_attr_rep_forces(sorted_ix::Int, substrate_inserting_ix::Int, grid::SimGrid, system_flat::AllAgentsFlat, params::AllParams)
 
 Aggregates all attraction-repulsion forces acting on a specific agent. Returns a 2-element vector containing 
 the resultant force on the agent.
 """
-function tally_attr_rep_forces(agent_ix::Int, substrate_inserting_ix::Int, grid::SimGrid, system_flat::AllAgentsFlat, params::AllParams)
+function tally_attr_rep_forces(sorted_ix::Int, sorted_substrate_inserting_ix::Int, grid::SimGrid, system_flat::AllAgentsFlat, params::AllParams)
 
     #initialise
     resultant_force = SVector{2, Float64}(0.0, 0.0)
 
-    #get sorted_ix
-    sorted_ix = system_flat.agent_ix_to_sorted_ix[agent_ix]
-
     #determine the cell the agent is in
-    agent_cell_z_ix = grid.agent_cell_z_ixs[agent_ix]
-    agent_cell_ix, agent_cell_jx = grid.z_ix_to_coords[agent_cell_z_ix]
+    agent_cell_z_ix = grid.agent_cell_z_ixs[sorted_ix]
+    agent_cell_ix = grid.z_ix_to_coords[2*agent_cell_z_ix-1]
+    agent_cell_jx = grid.z_ix_to_coords[2*agent_cell_z_ix]
 
     #calculate how wide around this cell we need to search for neighbours
-    max_agent_rad = maximum(system_flat.effective_radii[1:grid.num_agents])
+    max_agent_rad = max(params.OmpA.radius, params.OmpCF.radius, params.BamA.radius, params.LptD.radius, params.LPS.radius)
     agent_buffer_radius = system_flat.effective_radii[sorted_ix] + params.force.sensing_radius + max_agent_rad
     cell_buffer_num_x, cell_buffer_num_y = ceil.(Int, agent_buffer_radius./(grid.dims./grid.num_cells))
 
@@ -327,51 +380,47 @@ function tally_attr_rep_forces(agent_ix::Int, substrate_inserting_ix::Int, grid:
         neigh_cell_y = mod(agent_cell_jx + y_shift - 1, grid.num_cells[2]) + 1
         neigh_cell_z_ix = grid.coords_to_z_ix[(neigh_cell_y-1)*grid.num_cells[1] + neigh_cell_x]
 
-        #get the cell
-        neigh_cell = grid.cells[neigh_cell_z_ix]
-
-        #loop over agents in cell if not empty
-        if neigh_cell.num_agents > 0
-            n_ix = neigh_cell.start_agent
-            for _ in 1:neigh_cell.num_agents
-                #avoid self-interaction and attr-rep forces between substrate-inserting pairs
-                if n_ix!=agent_ix && n_ix!=substrate_inserting_ix
-                    
-                    #work out which type of interaction (for determining mu_attr)
-                    sorted_n_ix = system_flat.agent_ix_to_sorted_ix[n_ix]
-                    num_OMPs_in_interaction = system_flat.is_OMP[sorted_ix] + system_flat.is_OMP[sorted_n_ix]
-                    if num_OMPs_in_interaction==0
-                        mu_attr = params.force.mu_attr_LPS_LPS
-                    elseif num_OMPs_in_interaction==1
-                        mu_attr = params.force.mu_attr_OMP_LPS
-                    elseif num_OMPs_in_interaction==2
-                        mu_attr = params.force.mu_attr_OMP_OMP
-                    else
-                        error("Oops. There seems to be problem deciding which mu_attr to use.")
-                    end
-
-                    #pull out agent position
-                    agent_position = SVector{2, Float64}(system_flat.positions[2*sorted_ix-1], system_flat.positions[2*sorted_ix])
-                    neighbour_position = SVector{2, Float64}(system_flat.positions[2*sorted_n_ix-1], system_flat.positions[2*sorted_n_ix])
-
-                    #compute force between agent and neighbour
-                    resultant_force += compute_attr_rep_force(
-                        agent_position,
-                        system_flat.effective_radii[sorted_ix],
-                        neighbour_position,
-                        system_flat.effective_radii[sorted_n_ix],
-                        grid.dims,
-                        params.force.sensing_radius,
-                        mu_attr,
-                        params.force.mu_rep,
-                        params.force.max_repulsion,
-                        params.force.rho,
-                        params.force.k_C
-                    )
-
+        #loop over agents
+        start_agent = grid.start_agents_in_cell[neigh_cell_z_ix]
+        num_agents = grid.num_agents_in_cell[neigh_cell_z_ix]
+        for sorted_n_ix = start_agent:(start_agent + num_agents - 1)
+            #avoid self-interaction and attr-rep forces between substrate-inserting pairs
+            if sorted_n_ix!=sorted_ix && sorted_n_ix!=sorted_substrate_inserting_ix
+                
+                #work out which type of interaction (for determining mu_attr)
+                #(uses bitwise AND on identifiers for speed)
+                num_OMPs_in_interaction = 
+                    (system_flat.identifiers[sorted_ix] & 1) + 
+                    (system_flat.identifiers[sorted_n_ix] & 1)
+                if num_OMPs_in_interaction==0
+                    mu_attr = params.force.mu_attr_LPS_LPS
+                elseif num_OMPs_in_interaction==1
+                    mu_attr = params.force.mu_attr_OMP_LPS
+                elseif num_OMPs_in_interaction==2
+                    mu_attr = params.force.mu_attr_OMP_OMP
+                else
+                    error("Oops. There seems to be problem deciding which mu_attr to use.")
                 end
-                #move to next agent in linked list
-                n_ix = system_flat.successors[n_ix]
+
+                #pull out agent position
+                agent_position = SVector{2, Float64}(system_flat.positions[2*sorted_ix-1], system_flat.positions[2*sorted_ix])
+                neighbour_position = SVector{2, Float64}(system_flat.positions[2*sorted_n_ix-1], system_flat.positions[2*sorted_n_ix])
+
+                #compute force between agent and neighbour
+                resultant_force += compute_attr_rep_force(
+                    agent_position,
+                    system_flat.effective_radii[sorted_ix],
+                    neighbour_position,
+                    system_flat.effective_radii[sorted_n_ix],
+                    grid.dims,
+                    params.force.sensing_radius,
+                    mu_attr,
+                    params.force.mu_rep,
+                    params.force.max_repulsion,
+                    params.force.rho,
+                    params.force.k_C
+                )
+
             end
         end
     end
@@ -399,6 +448,12 @@ function compute_attr_rep_force(agent_pos::SVector{2, Float64}, agent_rad::Float
     #compute vector and distance between agents
     force_vec = shortest_vec(agent_pos, neighbour_pos, dims)
     dist = norm(force_vec)
+
+    #catch the case where distance is extremely small (avoid div by zero)
+    dist_eps = 1e-8
+    if dist<dist_eps
+        return SVector{2, Float64}(0.0, 0.0)
+    end
 
     #check if within sensing radius
     if dist > agent_rad + neighbour_rad + sensing_radius
@@ -445,6 +500,12 @@ function compute_inserting_substrate_force(agent_pos::SVector{2, Float64}, neigh
     #otherwise, compute vector and distance between agents
     force_vec = shortest_vec(agent_pos, neighbour_pos, dims)
     dist = norm(force_vec)
+
+    #handle case where the actual distance is extremely small (avoid div by zero)
+    dist_eps = 1e-8
+    if dist<dist_eps
+        return SVector{2, Float64}(0.0, 0.0)
+    end
 
     #agents too close
     if dist<ideal_dist

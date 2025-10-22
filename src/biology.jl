@@ -12,16 +12,17 @@ function update_BAM_subsystem!(agents::AllAgents, grid::SimGrid, system_flat::Al
     #iterate over BamAs in random order
     for BamA in sample(agents.OMP.BamA, length(agents.OMP.BamA), replace=false)
 
-        #check if there are any polypeptides left
-        if agents.num_PP == 0
-            break
-        end
-
         #ignore any unassembled BamAs
         if BamA.is_part_of_assembled_complex
 
             #BamA in "free" state
             if BamA.insertion_state == "free"
+
+                #check if there are any polypeptides left
+                if agents.num_PP == 0
+                    continue
+                end
+
                 pr_free_to_bound = 1 - exp(-params.insertion.PP_bind_rate * (agents.num_PP/(prod(grid.dims)))*params.system.dt)
                 if rand()<pr_free_to_bound
                     BamA.insertion_state = "bound"
@@ -43,25 +44,30 @@ function update_BAM_subsystem!(agents::AllAgents, grid::SimGrid, system_flat::Al
                         insertion_accepted = false
 
                         #iterate over agents in the Moore neighbourhood to see if there are any LPS
-                        agent_pos = BamA.position
-                        cell_z_ix = grid.agent_cell_z_ixs[BamA.index]
-                        cell_x, cell_y = grid.z_ix_to_coords[cell_z_ix]
+                        sorted_ix = system_flat.agent_ix_to_sorted_ix[BamA.index]
+                        cell_z_ix = grid.agent_cell_z_ixs[sorted_ix]
+                        cell_x = grid.z_ix_to_coords[2*cell_z_ix-1]
+                        cell_y = grid.z_ix_to_coords[2*cell_z_ix]
                         agent_buffer_radius = params.BamA.radius + params.force.sensing_radius + params.LPS.radius
                         cell_buffer_num_x, cell_buffer_num_y = ceil.(Int, agent_buffer_radius./(grid.dims./grid.num_cells)) 
                         for x_shift=-cell_buffer_num_x:cell_buffer_num_x, y_shift=-cell_buffer_num_y:cell_buffer_num_y
                             neigh_cell_x = mod(cell_x + x_shift -1, grid.num_cells[1])+1
                             neigh_cell_y = mod(cell_y + y_shift -1, grid.num_cells[2])+1
                             neigh_cell_z_ix = grid.coords_to_z_ix[(neigh_cell_y-1)*grid.num_cells[1] + neigh_cell_x]
-                            for n_ix in grid.cells[neigh_cell_z_ix].agent_ixs
+
+                            #loop over the agents in this neighbouring cell
+                            start_agent = grid.start_agents_in_cell[neigh_cell_z_ix]
+                            num_agents = grid.num_agents_in_cell[neigh_cell_z_ix]
+                            for sorted_n_ix = start_agent:(start_agent + num_agents - 1)
                                 #check if LPS (and not nascent)
-                                sorted_n_ix = system_flat.agent_ix_to_sorted_ix[n_ix]
-                                if system_flat.is_OMP[sorted_n_ix] && system_flat.substrate_inserting_ixs[sorted_n_ix]<0
+                                neighbour_identifier = system_flat.identifiers[sorted_n_ix]
+                                if (neighbour_identifier & 1) > 0 || neighbour_identifier > 1000 #i.e. is an OMP || is nascent
                                     continue
                                 end
 
                                 #check if close enough
                                 LPS_pos = SVector{2, Float64}(system_flat.positions[2*sorted_n_ix-1], system_flat.positions[2*sorted_n_ix])
-                                if shortest_distance(agent_pos, LPS_pos, grid.dims) < params.BamA.radius + params.force.sensing_radius + params.LPS.radius
+                                if shortest_distance(BamA.position, LPS_pos, grid.dims) < params.BamA.radius + params.force.sensing_radius + params.LPS.radius
                                     insertion_accepted = true
                                     break
                                 end
@@ -80,7 +86,6 @@ function update_BAM_subsystem!(agents::AllAgents, grid::SimGrid, system_flat::Al
                         generate_nascent_OMP_obj!(agents, grid, BamA, t, params)
 
                         #update this BamA too
-                        new_nascent_OMP_ix = grid.num_agents
                         BamA.insertion_state = "embedding"
                     end
                 end
@@ -268,7 +273,6 @@ function update_Lpt_subsystem!(agents::AllAgents, grid::SimGrid, params::AllPara
                     generate_nascent_LPS_obj!(agents, grid, LptD, t, params)
 
                     #update this LptD too
-                    new_nascent_LPS_ix = grid.num_agents
                     LptD.insertion_state = "embedding"
                 end
 

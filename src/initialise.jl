@@ -11,30 +11,26 @@ Output:
 (
     agents::AllAgents,
     grid::SimGrid,
-    system_flat::AllAgentsFlat,
-    nascent_added_area_lookup::NascentAddedAreaLookup
+    system_flat::AllAgentsFlat
 )
 
 """
-function initialise_system(params::AllParams)
+function initialise_system_cpu(params::AllParams)
 
     # set up output directory structure
     set_up_output_directory(params.system.output_dir)
 
-    #make a lookup table for area additions from nascent agents
-    nascent_added_area_lookup = build_nascent_added_area_lookup(params)
-
     # decide which initialisation to use
     if params.init.method == "random"
         println("Initialising model with random distribution of agents...")
-        agents, grid, system_flat = initialise_system_random(params)
+        agents, grid, system_flat_cpu = initialise_system_random(params)
     else
         #TODO: implement other initialisation methods?
         error("Initialisation type $(params.initialisation.init_type) not recognised.")
     end
 
     # return the initialised model (placeholder for now)
-    return (agents, grid, system_flat, nascent_added_area_lookup)
+    return (agents, grid, system_flat_cpu)
 end
 
 
@@ -47,54 +43,62 @@ function initialise_grid(params::AllParams) :: SimGrid
     
     # get dimensions and cell size from params
     dims = SVector{2, Float64}(params.init.dim_x, params.init.dim_y)
-    cell_width = params.force.sensing_radius
-    num_cells = SVector{2, Int}(ceil.(Int, dims./cell_width))
+    
+    #initial number of cells - this is zero for initialisation, gets filled on first update
+    num_cells_init = SVector{2, Int}(0, 0)
 
-    #make initial mappings between coords and Morton z index
-    coords_to_z_ix, z_ix_to_coords = build_dense_morton(num_cells)
+    #initial number of agents
+    num_agents_init = (
+        params.init.num_BamA + 
+        params.init.num_OmpA + 
+        params.init.num_OmpCF + 
+        params.init.num_LptD + 
+        params.init.num_LPS
+    )
 
     # create empty cells
-    start_agent_init = nothing
-    num_agents_init = 0
+    cell_width = params.force.sensing_radius
+    num_cells = SVector{2, Int}(ceil.(Int, dims./cell_width))
     cells_init = Vector{SimCell}(undef, prod(num_cells))
     for cell_z_ix = 1:prod(num_cells)
         agent_ixs_init = Int[]
         cells_init[cell_z_ix] = SimCell(
             cell_z_ix,
-            start_agent_init,
-            num_agents_init,
             agent_ixs_init
         )
     end
 
-    #other info we need to set up the grid
-    num_agents_init = (
-        params.init.num_BamA + 
-        params.init.num_OmpA + 
-        params.init.num_OmpCF + 
-        params.init.num_LptD + 
-        params.init.num_LPS
-    )
-    agent_cell_z_ixs_init = zeros(Int, num_agents_init)
+    #rest of the fields are empty - we do this on the first call to update_grid!
+    coords_to_z_ix = Int[]
+    z_ix_to_coords = Int[]
+    agent_cell_z_ixs_init = Int[]
+    num_agents_in_cell = Int[]
+    start_agents_in_cell = Int[]
+    has_changed_init = true
 
     return SimGrid(
         dims,
-        num_cells,
+        num_cells_init,
         num_agents_init,  
         coords_to_z_ix,
         z_ix_to_coords,
         agent_cell_z_ixs_init, 
-        cells_init
+        num_agents_in_cell,
+        start_agents_in_cell,
+        cells_init,
+        has_changed_init
     )
 end
 
 
 """
-    initialise_flat(params::AllParams) -> AllAgentsFlat
+    initialise_flat_cpu(params::AllParams) -> AllAgentsFlat
 
 Initialises a blank flat data structure used for force calculation.
 """
-function initialise_flat(params::AllParams) :: AllAgentsFlat
+function initialise_flat_cpu(params::AllParams) :: AllAgentsFlat
+
+    #number of agents
     num_agents_init = (
         params.init.num_BamA + 
         params.init.num_OmpA + 
@@ -102,32 +106,31 @@ function initialise_flat(params::AllParams) :: AllAgentsFlat
         params.init.num_LptD + 
         params.init.num_LPS
     )
+
+    #initial buffer for nascent-inserting agents
+    nascent_buffer_size = round(Int, 1.5 * (params.init.num_BamA + params.init.num_LptD))
+
+    #allocate memory
     positions = Vector{Float64}(undef, 2*num_agents_init)
     next_positions = Vector{Float64}(undef, 2*num_agents_init)
     effective_radii = Vector{Float64}(undef, num_agents_init)
-    actual_radii = Vector{Float64}(undef, num_agents_init)
-    is_OMP = Vector{Bool}(undef, num_agents_init)
-    is_tethered = Vector{Bool}(undef, num_agents_init)
+    identifiers = Vector{Int}(undef, num_agents_init)
     tether_points = Vector{Float64}(undef, 2*num_agents_init)
-    tether_lengths = Vector{Float64}(undef, num_agents_init)
-    substrate_inserting_ixs = Vector{Int}(undef, num_agents_init)
-    substrate_inserting_ideal_dists = Vector{Float64}(undef, num_agents_init)
-    successors = Vector{Int}()
-    agent_ix_to_sorted_ix = Vector{Int}()
-    sorted_ix_to_agent_ix = Vector{Int}()
+    nascent_to_inserting_ixs = Vector{Int}(undef, nascent_buffer_size)
+    nascent_to_substrate_ixs = Vector{Int}(undef, nascent_buffer_size)
+    substrate_inserting_ideal_dists = Vector{Float64}(undef, nascent_buffer_size)
+    agent_ix_to_sorted_ix = Vector{Int}(undef, num_agents_init)
+    sorted_ix_to_agent_ix = Vector{Int}(undef, num_agents_init)
 
     return AllAgentsFlat(
         positions,
         next_positions,
         effective_radii,
-        actual_radii,
-        is_OMP,
-        is_tethered,
+        identifiers,
         tether_points,
-        tether_lengths,
-        substrate_inserting_ixs,
+        nascent_to_inserting_ixs,
+        nascent_to_substrate_ixs,
         substrate_inserting_ideal_dists,
-        successors,
         agent_ix_to_sorted_ix,
         sorted_ix_to_agent_ix
     )
@@ -293,7 +296,7 @@ function initialise_system_random(params::AllParams)
 
     #initialise spatial grid and flat structure for force calculation
     grid = initialise_grid(params)
-    system_flat = initialise_flat(params)
+    system_flat_cpu = initialise_flat_cpu(params)
 
     #initialisation defaults
     init_agent_arrival_time = -Inf     #init objects assumed to have arrived at -Inf
@@ -374,23 +377,31 @@ function initialise_system_random(params::AllParams)
         AllNascent(nascent_OMPs_init, nascent_LPS_init),
         num_PP_init
     )
-    
+
     #run equilibration
     t = 0.0
     time_err = 0.1 * params.system.dt
     while t < params.init.equilibration_time - time_err
         rebuild_grid!(grid, agents, params.force.sensing_radius)
-        compile_flat_system_data!(system_flat, agents, grid, params)
-        resolve_forces!(agents, grid, system_flat, params)
+        compile_flat_system_data_cpu!(system_flat_cpu, agents, grid, params)
+        put_grid_in_sorted_order!(grid, system_flat_cpu)
+        resolve_forces_cpu!(agents, grid, system_flat_cpu, params)
         t += params.system.dt
+
+
+        #report time
+        if abs(t/params.system.vis_dt - round(t/params.system.vis_dt))<time_err
+            @printf "Running equilibration: τ=%5.2f\r" t
+        end
     end
+    println("\nEquilibration complete.")
 
     #if specified, set all agents as assembled/tethered
     if params.init.complexes_assembled
         assemble_all_agents!(agents)
     end
 
-    return (agents, grid, system_flat)
+    return (agents, grid, system_flat_cpu)
 end
 
 

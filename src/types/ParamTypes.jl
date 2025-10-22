@@ -79,6 +79,7 @@ struct SystemParams
     vis_dt::Float64
     output_dir::String
     seed::Union{Nothing, Int}
+    device::Union{Nothing, String}
 end
 
 

@@ -16,26 +16,37 @@ function rebuild_grid!(grid::SimGrid, agents::AllAgents, sensing_radius::Float64
     act_cell_width = grid.dims./num_cells
 
     #if grid size has changed, rebuild the grid
+    grid.has_changed = false
     if num_cells != grid.num_cells
+
+        #flag that grid has changed
+        grid.has_changed = true
+
+        #rebuild grid fields
         grid.num_cells = num_cells
-        grid.cells = Vector{SimCell}(undef, prod(num_cells))
 
         #also need to rebuild the coord to Morton mapping
         coords_to_z_ix, z_ix_to_coords = build_dense_morton(num_cells)
         grid.coords_to_z_ix = coords_to_z_ix
         grid.z_ix_to_coords = z_ix_to_coords
+
+        #check if grid vectors need resizing
+        curr_grid_vec_size = length(grid.agent_cell_z_ixs)
+        if prod(num_cells) > curr_grid_vec_size
+            size_increase_ratio = 1.25
+            new_vec_size = ceil(Int, size_increase_ratio*prod(num_cells))
+            resize!(grid.cells, new_vec_size)
+            resize!(grid.num_agents_in_cell, new_vec_size)
+            resize!(grid.start_agents_in_cell, new_vec_size)
+        end
+
     end
 
-    #create or clear the cells
-    start_agent_init = nothing
-    num_agents_init = 0
+    #clear the cells
     for cell_z_ix = 1:prod(num_cells)
-        agent_ixs_init = Int[]
         grid.cells[cell_z_ix] = SimCell(
             cell_z_ix,
-            start_agent_init,
-            num_agents_init,
-            agent_ixs_init
+            Int[]
         )
     end
 
@@ -43,7 +54,8 @@ function rebuild_grid!(grid::SimGrid, agents::AllAgents, sensing_radius::Float64
     curr_agent_cell_z_ixs_size = length(grid.agent_cell_z_ixs)
     if grid.num_agents>curr_agent_cell_z_ixs_size
         size_increase_ratio = 1.25
-        resize!(grid.agent_cell_z_ixs, ceil(Int, size_increase_ratio*curr_agent_cell_z_ixs_size))
+        new_vec_size = ceil(Int, size_increase_ratio*grid.num_agents)
+        resize!(grid.agent_cell_z_ixs, new_vec_size)
     end
 
     #now partition agents into cells based on position
@@ -51,7 +63,11 @@ function rebuild_grid!(grid::SimGrid, agents::AllAgents, sensing_radius::Float64
                                     agents.LPS, agents.nascent.nascent_OMP, agents.nascent.nascent_LPS))
     for agent in all_agents
         agent_ix = agent.index
-        cell_x, cell_y = ceil.(Int, agent.position./act_cell_width)
+        
+        cell_x, cell_y = ceil.(Int, agent.position ./ act_cell_width)
+        cell_x = clamp(cell_x, 1, num_cells[1])
+        cell_y = clamp(cell_y, 1, num_cells[2])
+
         cell_z_ix = grid.coords_to_z_ix[(cell_y-1)*grid.num_cells[1] + cell_x]
 
         push!(grid.cells[cell_z_ix].agent_ixs, agent_ix)
@@ -59,10 +75,14 @@ function rebuild_grid!(grid::SimGrid, agents::AllAgents, sensing_radius::Float64
     end
     
     #update numbers of agents in each sim cell and its starting agent
-    for cell in grid.cells
+    for z_ix = 1:prod(num_cells)
+        cell = grid.cells[z_ix]
         if length(cell.agent_ixs)>0
-            cell.start_agent=cell.agent_ixs[1]
-            cell.num_agents=length(cell.agent_ixs)
+            grid.start_agents_in_cell[z_ix] = cell.agent_ixs[1]
+            grid.num_agents_in_cell[z_ix]=length(cell.agent_ixs)
+        else
+            grid.start_agents_in_cell[z_ix] = 0
+            grid.num_agents_in_cell[z_ix] = 0
         end
     end
 
@@ -157,4 +177,39 @@ function rescale_agent!(agent::AbstractAgent, old_dims::SVector{2, Float64}, sca
     if has_tether
         agent.tether_point = agent.position + agent_to_tether_vec
     end
+end
+
+
+
+"""
+
+
+Uses the ordering in system_flat to redefine grid fields in terms of sorted agent indices.
+"""
+function put_grid_in_sorted_order!(grid::SimGrid, system_flat::AllAgentsFlat)
+
+    #redefine agent_cell_z_ixs in terms of sorted indices
+    agent_cell_z_ixs_sorted = Vector{Int}(undef, grid.num_agents)
+    for agent_ix = 1:grid.num_agents
+        sorted_ix = system_flat.agent_ix_to_sorted_ix[agent_ix]
+        agent_cell_z_ixs_sorted[sorted_ix] = grid.agent_cell_z_ixs[agent_ix]
+    end
+    grid.agent_cell_z_ixs = agent_cell_z_ixs_sorted
+
+    #redefine start_agents_in_cell in terms of sorted indices
+    for cell_z_ix = 1:prod(grid.num_cells)
+        if grid.num_agents_in_cell[cell_z_ix]>0
+            start_ix = grid.start_agents_in_cell[cell_z_ix]
+            sorted_start_ix = system_flat.agent_ix_to_sorted_ix[start_ix]
+            grid.start_agents_in_cell[cell_z_ix] = sorted_start_ix
+        end
+
+        #actually don't need to reorder agent_ixs in each cell, as we don't use them after building successors list
+        # for foo = 1:length(grid.cells[cell_z_ix].agent_ixs)
+        #     agent_ix = grid.cells[cell_z_ix].agent_ixs[foo]
+        #     sorted_ix = system_flat.agent_ix_to_sorted_ix[agent_ix]
+        #     grid.cells[cell_z_ix].agent_ixs[foo] = sorted_ix
+        # end
+    end
+
 end

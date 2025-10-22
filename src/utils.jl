@@ -29,7 +29,7 @@ end
 Precompute dense Morton mappings for a grid.
 Returns two vectors:
 - coords_to_z_ix[(y-1)*cols + x] = (dense) Morton index
-- z_ix_to_coords[dense] = (x,y) tuple
+- z_ix_to_coords[(2*dense-1):(2*dense)] = x, y coords
 """
 function build_dense_morton(num_cells::SVector{2, Int})
 
@@ -44,12 +44,13 @@ function build_dense_morton(num_cells::SVector{2, Int})
 
     #initialise output vectors
     coords_to_z_ix = Vector{Int}(undef, tot_cells)
-    z_ix_to_coords = Vector{Tuple{Int,Int}}(undef, tot_cells)
+    z_ix_to_coords = Vector{Int}(undef, 2*tot_cells)
 
     #build mappings
     for (dense, (x,y)) in enumerate(coords)
         coords_to_z_ix[(y-1)*cols + x] = dense
-        z_ix_to_coords[dense] = (x,y)
+        z_ix_to_coords[2*dense-1] = x
+        z_ix_to_coords[2*dense] = y
     end
 
     return coords_to_z_ix, z_ix_to_coords
@@ -100,4 +101,70 @@ function change_field(obj, field::String, val)
 
     #rebuild
     return typeof(obj)(updated_nt...)
+end
+
+
+
+"""
+simple function to generate an compact identifier for an agent, encoding its properties
+(this is a little bit janky but is memory efficient and fast)
+"""
+@inline function make_identifier(;is_tethered::Bool, agent_type::String, is_inserting::Bool, is_nascent::Bool, nascent_ix::Int)
+
+    @assert nascent_ix<990 "There are too many nascent agents being inserted at once ($nascent_ix), cannot encode in identifier!"
+
+    agent_type_to_num = Dict(
+        "OmpA" => 1,
+        "OmpCF" => 3,
+        "BamA" => 5,
+        "LptD" => 7,
+        "LPS" => 2
+    )
+
+    identifier = agent_type_to_num[agent_type]
+    if is_tethered
+        identifier *= -1
+    end
+
+    if is_inserting
+        identifier += 10*nascent_ix
+    end
+
+    if is_nascent
+        identifier += 10*nascent_ix
+        identifier += 1000
+    end
+
+    return identifier
+end
+
+
+
+"""
+recovers agent properties from compact identifier
+"""
+@inline function parse_identifier(identifier::Int)
+    num_to_agent_type = Dict(
+        1 => "OmpA",
+        3 => "OmpCF",
+        5 => "BamA",
+        7 => "LptD",
+        2 => "LPS"
+    )
+    is_tethered = identifier < 0
+    if is_tethered
+        identifier *= -1
+    end
+    is_nascent = identifier > 1000
+    if is_nascent
+        is_inserting = false
+        identifier -= 1000
+    else
+        is_inserting = identifier > 10
+    end
+    nascent_ix = floor(Int, identifier / 10)
+    identifier -= nascent_ix * 10
+
+    agent_type = num_to_agent_type[identifier]
+    return is_tethered, agent_type, is_nascent, is_inserting, nascent_ix
 end

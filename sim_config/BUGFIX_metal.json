@@ -2,7 +2,7 @@
     "OmpA": {
         "radius": 0.0518,
         "insertion_prob": 0.7,
-        "tether_rate": 0.3,
+        "tether_rate": 0,
         "tether_radius": 0.025
     },
     "OmpCF" : {
@@ -12,7 +12,7 @@
     "LptD": {
         "radius": 0.259,
         "insertion_prob": 0,
-        "complex_assembly_rate" : 0.1,
+        "complex_assembly_rate" : 0,
         "tether_radius": 0.06
     },
     "BamA": {
@@ -22,7 +22,7 @@
     },
     "LPS": {
         "radius": 0.0345,
-        "arrival_rate": 0.5,
+        "arrival_rate": 0,
         "insertion_time": 1.0 
     },
     "init": {
@@ -35,7 +35,7 @@
         "num_LPS": 20,
         "num_PP": 0,
         "method": "random",
-        "equilibration_time": 10,
+        "equilibration_time": 0,
         "complexes_assembled": true
     },
     "insertion": {
@@ -44,9 +44,9 @@
         "mu_rep" : 0.5,
         "mu_attr" : 0.5,
         "k_C": 0.5,
-        "PP_arrival_rate": 0.5,
-        "PP_bind_rate": 0.05,
-        "OMP_assembly_rate": 0.025
+        "PP_arrival_rate": 0,
+        "PP_bind_rate": 0,
+        "OMP_assembly_rate": 0
     },
     "force": {
         "temperature": 0,
@@ -66,7 +66,8 @@
         "num_sub_timesteps": 10,
         "t_max": 30,
         "vis_dt": 0.1,
-        "output_dir": "TEST",
-        "seed": 1
+        "output_dir": "BUGFIX_metal",
+        "seed": 5,
+        "device": "metal"
     }
 }
