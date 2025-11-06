@@ -56,14 +56,28 @@ function run_sim(config_pathname::String)
 
 
     #main loop
+    steps_since_grid_sync = 0
+    MAX_STEPS_BETWEEN_GRID_SYNC = 10 #temporary
     time_err = 0.1*params.system.dt
     while t<params.system.t_max - time_err
+
+        #TMP: check if agents have been added
+        curr_num_agents = grid_size.num_agents
+        num_agents_changed = false
+        ####
 
         #update BAM subsystem
         update_BAM_subsystem!(agents, grid_size, grid, system_flat_cpu, params, t)
 
         #update Lpt subsystem
         update_Lpt_subsystem!(agents, grid_size, params, t)
+
+        #TMP: check if agents have been added
+        if curr_num_agents != grid_size.num_agents
+            num_agents_changed = true
+        end
+        ####
+
 
         #check for any new tethering or assembly
         update_tethering_and_assembly!(agents, params)
@@ -75,12 +89,17 @@ function run_sim(config_pathname::String)
         rescale_domain!(agents, grid_size, params, nascent_added_area_lookup, t)
 
         #compute diffusion of every agent
-        compute_diffusion!(agents, grid_size, params)
+        compute_diffusion!(agents, system_flat_cpu, grid_size, params)
 
         #update the grid and flat system data
-        rebuild_grid!(grid_size, grid, agents, params.force.sensing_radius)
-        compile_flat_system_data_cpu!(system_flat_cpu, agents, grid_size, grid, params)
-        put_grid_in_sorted_order!(grid_size, grid, system_flat_cpu)
+        if steps_since_grid_sync >= MAX_STEPS_BETWEEN_GRID_SYNC || num_agents_changed
+            rebuild_grid!(grid_size, grid, agents, params.force.sensing_radius)
+            compile_flat_system_data_cpu!(system_flat_cpu, agents, grid_size, grid, params)
+            put_grid_in_sorted_order!(grid_size, grid, system_flat_cpu)
+            steps_since_grid_sync = 0
+        else
+            steps_since_grid_sync += 1
+        end
 
         #resolve inter-agent forces
         if device=="cpu"

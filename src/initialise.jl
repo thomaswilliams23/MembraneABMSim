@@ -117,6 +117,7 @@ function initialise_flat_cpu(params::AllParams) :: AllAgentsFlat
     effective_radii = Vector{Float64}(undef, num_agents_init)
     identifiers = Vector{Int}(undef, num_agents_init)
     tether_points = Vector{Float64}(undef, 2*num_agents_init)
+    agg_dist_since_grid_sync = Vector{Float64}(undef, num_agents_init)
     nascent_to_inserting_ixs = Vector{Int}(undef, nascent_buffer_size)
     nascent_to_substrate_ixs = Vector{Int}(undef, nascent_buffer_size)
     substrate_inserting_ideal_dists = Vector{Float64}(undef, nascent_buffer_size)
@@ -129,6 +130,7 @@ function initialise_flat_cpu(params::AllParams) :: AllAgentsFlat
         effective_radii,
         identifiers,
         tether_points,
+        agg_dist_since_grid_sync,
         nascent_to_inserting_ixs,
         nascent_to_substrate_ixs,
         substrate_inserting_ideal_dists,
@@ -391,16 +393,31 @@ function initialise_system_random(params::AllParams)
     grid_size, grid = initialise_grid(params)
     system_flat_cpu = initialise_flat_cpu(params)
     agents = initialise_agents(grid_size, params)
-    
+
+    #populate data structures
+    rebuild_grid!(grid_size, grid, agents, params.force.sensing_radius)
+    compile_flat_system_data_cpu!(system_flat_cpu, agents, grid_size, grid, params)
+    put_grid_in_sorted_order!(grid_size, grid, system_flat_cpu)
 
     #run equilibration
+    steps_since_grid_sync = 0
+    MAX_STEPS_BETWEEN_GRID_SYNC = 10 #temporary
     t = 0.0
     time_err = 0.1 * params.system.dt
     while t < params.init.equilibration_time - time_err
-        rebuild_grid!(grid_size, grid, agents, params.force.sensing_radius)
-        compile_flat_system_data_cpu!(system_flat_cpu, agents, grid_size, grid, params)
-        put_grid_in_sorted_order!(grid_size, grid, system_flat_cpu)
+
+        if steps_since_grid_sync >= MAX_STEPS_BETWEEN_GRID_SYNC
+            rebuild_grid!(grid_size, grid, agents, params.force.sensing_radius)
+            compile_flat_system_data_cpu!(system_flat_cpu, agents, grid_size, grid, params)
+            put_grid_in_sorted_order!(grid_size, grid, system_flat_cpu)
+
+            steps_since_grid_sync = 0
+        else
+            steps_since_grid_sync += 1
+        end
+
         resolve_forces_cpu!(agents, grid_size, grid, system_flat_cpu, params)
+        
         t += params.system.dt
 
 
