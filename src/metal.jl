@@ -14,10 +14,11 @@ function initialise_system_metal(params::AllParams)
         println("Initialising model with random distribution of agents...")
         (
             agents, 
-            grid, 
+            grid_size,
+            grid,
             system_flat_cpu,
             all_data_metal,
-            grid_metal,
+            grid_size_metal,
             params_metal
         ) = initialise_system_random_metal(force_kernel, params)
     else
@@ -26,7 +27,7 @@ function initialise_system_metal(params::AllParams)
     end
 
     # return the initialised model
-    return (force_kernel, agents, grid, system_flat_cpu, all_data_metal, grid_metal, params_metal)
+    return (force_kernel, agents, grid_size, grid, system_flat_cpu, all_data_metal, grid_size_metal, params_metal)
 end
 
 
@@ -39,100 +40,24 @@ to resolve positions.
 """
 function initialise_system_random_metal(force_kernel, params::AllParams)
 
-    #initialise spatial grid and flat structure for force calculation
-    grid = initialise_grid(params)
+    #initialise CPU-bound objects
+    grid_size, grid = initialise_grid(params)
+    agents = initialise_agents(grid_size, params)
     system_flat_cpu = initialise_flat_cpu(params)
-    grid_metal, params_metal = initialise_CPU_metal_data(grid, params)
-    all_data_metal = initialise_GPU_metal_data(grid, params)
+    grid_size_metal, params_metal = initialise_CPU_metal_data(grid_size, params)
 
-    #initialisation defaults
-    init_agent_arrival_time = -Inf     #init objects assumed to have arrived at -Inf
-
-    is_tethered_init = false           #all agents initialised as untethered
-    tether_point_init = 0.0            #all agents initialised as untethered
-    is_assembled_init = false          #all agents initialised as unassembled
-    insertion_state_init = "free"      #all agents initialised in the "free" state
-
-    nascent_OMPs_init = Vector{NascentOMPAgent}()
-                                       #no initial nascent objects
-    nascent_LPS_init = Vector{NascentLPSAgent}()
-                                       #no initial nascent objects
-
-    #initialise agents and package them
-    num_agents_allocated_so_far = 0
-    all_OmpAs = [
-        OmpAAgent(
-            ix + num_agents_allocated_so_far,
-            SVector{2, Float64}(rand() * grid.dims[1], rand() * grid.dims[2]),
-            init_agent_arrival_time, 
-            is_tethered_init, 
-            SVector{2, Float64}(tether_point_init, tether_point_init)
-        )
-        for ix in 1:params.init.num_OmpA
-    ]
-
-    num_agents_allocated_so_far += params.init.num_OmpA
-    all_OmpCFs = [
-        OmpCFAgent(
-            ix + num_agents_allocated_so_far,
-            SVector{2, Float64}(rand() * grid.dims[1], rand() * grid.dims[2]),
-            init_agent_arrival_time
-        )
-        for ix in 1:params.init.num_OmpCF
-    ]
-
-    num_agents_allocated_so_far += params.init.num_OmpCF
-    all_LptDs = [
-        LptDAgent(
-            ix + num_agents_allocated_so_far,
-            SVector{2, Float64}(rand() * grid.dims[1], rand() * grid.dims[2]),
-            init_agent_arrival_time, 
-            is_tethered_init, 
-            SVector{2, Float64}(tether_point_init, tether_point_init), 
-            is_assembled_init, 
-            insertion_state_init
-        )
-        for ix in 1:params.init.num_LptD
-    ]
-
-    num_agents_allocated_so_far += params.init.num_LptD
-    all_BamAs = [
-        BamAAgent(
-            ix + num_agents_allocated_so_far,
-            SVector{2, Float64}(rand() * grid.dims[1], rand() * grid.dims[2]),
-            init_agent_arrival_time, 
-            is_assembled_init, 
-            insertion_state_init
-        )
-        for ix in 1:params.init.num_BamA
-    ]
-
-    num_agents_allocated_so_far += params.init.num_BamA
-    all_LPS = [
-        LPSAgent(
-            ix + num_agents_allocated_so_far,
-            SVector{2, Float64}(rand() * grid.dims[1], rand() * grid.dims[2]),
-            init_agent_arrival_time
-        )
-        for ix in 1:params.init.num_LPS
-    ]
-
-    num_PP_init = params.init.num_PP
-    agents = AllAgents(
-        AllOMPs(all_OmpAs, all_OmpCFs, all_LptDs, all_BamAs),
-        all_LPS,
-        AllNascent(nascent_OMPs_init, nascent_LPS_init),
-        num_PP_init
-    )
+    #initialise GPU-bound data
+    all_data_metal = initialise_GPU_metal_data(grid_size, params)
+    
+    #build initial grid
+    rebuild_grid!(grid_size, grid, agents, params.force.sensing_radius)
+    copy_data_to_metal!(all_data_metal, grid_size_metal, system_flat_cpu, grid_size, grid)
 
     #run equilibration
     t = 0.0
     time_err = 0.1 * params.system.dt
     while t < params.init.equilibration_time - time_err
-        rebuild_grid!(grid, agents, params.force.sensing_radius)
-        compile_flat_system_data_cpu!(system_flat_cpu, agents, grid, params)
-        copy_data_to_metal!(all_data_metal, grid_metal, system_flat_cpu, grid)
-        resolve_forces_metal!(force_kernel, agents, system_flat_cpu, all_data_metal, grid_metal, params_metal)
+        update_positions_metal!(force_kernel, agents, system_flat_cpu, all_data_metal, grid_metal, params_metal)
         t += params.system.dt
 
         #report time
@@ -148,7 +73,7 @@ function initialise_system_random_metal(force_kernel, params::AllParams)
         assemble_all_agents!(agents)
     end
 
-    return (agents, grid, system_flat_cpu, all_data_metal, grid_metal, params_metal)
+    return (agents, grid_size, grid, system_flat_cpu, all_data_metal, grid_size_metal, params_metal)
 end
 
 
@@ -157,7 +82,7 @@ end
 """
 initialise metal data
 """
-function initialise_GPU_metal_data(grid::SimGrid, params::AllParams)
+function initialise_GPU_metal_data(grid_size::GridSize, params::AllParams)
 
     #first build the flat system data
     num_agents_init = (
@@ -182,13 +107,14 @@ function initialise_GPU_metal_data(grid::SimGrid, params::AllParams)
     nascent_to_substrate_ixs = MtlVector{Int, Metal.PrivateStorage}(undef, nascent_buffer_size)
     substrate_inserting_ideal_dists = MtlVector{Float32, Metal.PrivateStorage}(undef, nascent_buffer_size)
     
-    coords_to_z_ix = MtlVector{Int, Metal.PrivateStorage}(undef, prod(grid.num_cells))
-    z_ix_to_coords = MtlVector{Int, Metal.PrivateStorage}(undef, 2*prod(grid.num_cells))
+    coords_to_z_ix = MtlVector{Int, Metal.PrivateStorage}(undef, grid_size.tot_num_cells)
+    z_ix_to_coords = MtlVector{Int, Metal.PrivateStorage}(undef, 2*grid_size.tot_num_cells)
     agent_cell_z_ixs = MtlVector{Int, Metal.PrivateStorage}(undef, num_agents_init)
-    num_agents_in_cell = MtlVector{Int, Metal.PrivateStorage}(undef, prod(grid.num_cells))
-    start_agents_in_cell = MtlVector{Int, Metal.PrivateStorage}(undef, prod(grid.num_cells))
+    num_agents_in_cell = MtlVector{Int, Metal.PrivateStorage}(undef, grid_size.tot_num_cells)
+    start_agents_in_cell = MtlVector{Int, Metal.PrivateStorage}(undef, grid_size.tot_num_cells)
 
-    return AllDataMetal(
+    #package together
+    all_data_metal = AllDataMetal(
         positions,
         next_positions,
         effective_radii,
@@ -203,22 +129,26 @@ function initialise_GPU_metal_data(grid::SimGrid, params::AllParams)
         num_agents_in_cell,
         start_agents_in_cell
     )
+
+    return all_data_metal
 end
 
 
 """
 initialise metal data
 """
-function initialise_CPU_metal_data(grid::SimGrid, params::AllParams)
+function initialise_CPU_metal_data(grid_size::GridSize, params::AllParams)
 
-    #extract some grid data we will need (mutable)
-    grid_metal = GridMetal(
-        Float32.(grid.dims),
-        grid.num_cells,
-        grid.num_agents
+    #grid_size_metal object (pretty much an exact clone of the CPU version, but GPU safe)
+    grid_size_metal = GridSizeMetal(
+        Float32.(grid_size.dims),
+        grid_size.num_cells,
+        grid_size.tot_num_cells,
+        grid_size.num_agents,
+        grid_size.has_changed
     )
 
-    #build the params metal struct (immutable)
+    #build the params metal struct (flat, hence passable to GPU)
     params_metal = ParamsMetal(
         Float32(params.system.dt),
         Float32(params.OmpA.radius),
@@ -243,23 +173,23 @@ function initialise_CPU_metal_data(grid::SimGrid, params::AllParams)
     )
 
     return (
-        grid_metal,
+        grid_size_metal,
         params_metal
     )
 
 end
 
 
-
 """
 copies flat system data from CPU to GPU, updates grid data that the GPU kernel will use
 """
-function copy_data_to_metal!(all_data_metal::AllDataMetal, grid_metal::GridMetal, system_flat_cpu::AllAgentsFlat, grid::SimGrid)
-
+function copy_data_to_metal!(all_data_metal::AllDataMetal, grid_size_metal::GridSizeMetal, system_flat_cpu::AllAgentsFlat, grid_size::GridSize, grid::SimGrid)
+    
     #handle resizing
     curr_agent_vec_capacity = length(all_data_metal.effective_radii)
     curr_grid_vec_capacity = length(all_data_metal.num_agents_in_cell)
-    if grid.num_agents>curr_agent_vec_capacity
+    curr_nascent_capacity = length(all_data_metal.nascent_to_substrate_ixs)
+    if grid_size.num_agents>curr_agent_vec_capacity
         size_increase_ratio = 1.25
         new_agent_vec_size = ceil(Int, size_increase_ratio*grid.num_agents)
         resize!(all_data_metal.positions, 2*new_agent_vec_size)
@@ -269,42 +199,48 @@ function copy_data_to_metal!(all_data_metal::AllDataMetal, grid_metal::GridMetal
         resize!(all_data_metal.tether_points, 2*new_agent_vec_size)
         resize!(all_data_metal.agent_cell_z_ixs, new_agent_vec_size)
     end
-    if prod(grid.num_cells)>curr_grid_vec_capacity
+    if grid_size.tot_num_cells>curr_grid_vec_capacity
         size_increase_ratio = 1.25
-        new_grid_vec_size = ceil(Int, size_increase_ratio*prod(grid.num_cells))
+        new_grid_vec_size = ceil(Int, size_increase_ratio*grid_size.tot_num_cells)
         resize!(all_data_metal.coords_to_z_ix, new_grid_vec_size)
         resize!(all_data_metal.z_ix_to_coords, 2*new_grid_vec_size)
         resize!(all_data_metal.num_agents_in_cell, new_grid_vec_size)
         resize!(all_data_metal.start_agents_in_cell, new_grid_vec_size)
     end
+    if length(system_flat_cpu.nascent_to_substrate_ixs) > curr_nascent_capacity
+        size_increase_ratio = 1.25
+        new_vec_size = ceil(Int, size_increase_ratio * length(system_flat_cpu.nascent_to_substrate_ixs))
+        resize!(all_data_metal.nascent_to_substrate_ixs, new_vec_size)
+        resize!(all_data_metal.nascent_to_inserting_ixs, new_vec_size)
+        resize!(all_data_metal.substrate_inserting_ideal_dists, new_vec_size)
+    end
 
 
     #copy across flat system data
-    copyto!(all_data_metal.positions, system_flat_cpu.positions[1:2*grid.num_agents])
-    copyto!(all_data_metal.next_positions, system_flat_cpu.next_positions[1:2*grid.num_agents])
-    copyto!(all_data_metal.effective_radii, system_flat_cpu.effective_radii[1:grid.num_agents])
-    copyto!(all_data_metal.identifiers, system_flat_cpu.identifiers[1:grid.num_agents])
-    copyto!(all_data_metal.tether_points, system_flat_cpu.tether_points[1:2*grid.num_agents])
+    copyto!(all_data_metal.positions, system_flat_cpu.positions[1:2*grid_size.num_agents])
+    copyto!(all_data_metal.effective_radii, system_flat_cpu.effective_radii[1:grid_size.num_agents])
+    copyto!(all_data_metal.identifiers, system_flat_cpu.identifiers[1:grid_size.num_agents])
+    copyto!(all_data_metal.tether_points, system_flat_cpu.tether_points[1:2*grid_size.num_agents])
 
     copyto!(all_data_metal.nascent_to_inserting_ixs, system_flat_cpu.nascent_to_inserting_ixs)
     copyto!(all_data_metal.nascent_to_substrate_ixs, system_flat_cpu.nascent_to_substrate_ixs)
     copyto!(all_data_metal.substrate_inserting_ideal_dists, system_flat_cpu.substrate_inserting_ideal_dists)
 
     #copy across grid data
-    copyto!(all_data_metal.agent_cell_z_ixs, grid.agent_cell_z_ixs[1:grid.num_agents])
+    copyto!(all_data_metal.agent_cell_z_ixs, grid.agent_cell_z_ixs[1:grid_size.num_agents])
 
-    copyto!(all_data_metal.num_agents_in_cell, grid.num_agents_in_cell[1:prod(grid.num_cells)])
-    copyto!(all_data_metal.start_agents_in_cell, grid.start_agents_in_cell[1:prod(grid.num_cells)])
+    copyto!(all_data_metal.num_agents_in_cell, grid.num_agents_in_cell[1:grid_size.tot_num_cells])
+    copyto!(all_data_metal.start_agents_in_cell, grid.start_agents_in_cell[1:grid_size.tot_num_cells])
 
     #update grid metal data (CPU-bound)
-    grid_metal.dims = Float32.(grid.dims)
-    grid_metal.num_agents = grid.num_agents
+    grid_size_metal.dims = Float32.(grid_size.dims)
+    grid_size_metal.num_agents = grid_size.num_agents
 
     #morton lookup tables and grid size only need updating if grid has been resized
-    if grid.has_changed
-        copyto!(all_data_metal.coords_to_z_ix, grid.coords_to_z_ix[1:prod(grid.num_cells)])
-        copyto!(all_data_metal.z_ix_to_coords, grid.z_ix_to_coords[1:2*prod(grid.num_cells)])
-        grid_metal.num_cells = grid.num_cells
+    if grid_size.has_changed
+        copyto!(all_data_metal.coords_to_z_ix, grid.coords_to_z_ix[1:grid_size.tot_num_cells])
+        copyto!(all_data_metal.z_ix_to_coords, grid.z_ix_to_coords[1:2*grid_size.tot_num_cells])
+        grid_size_metal.num_cells = grid_size.num_cells
     end
 
 end
@@ -316,7 +252,7 @@ end
 computes forces on metal GPU
 """
 function resolve_forces_metal!(force_kernel, agents::AllAgents, system_flat_cpu::AllAgentsFlat, all_data_metal::AllDataMetal, 
-                               grid_metal::GridMetal, params_metal::ParamsMetal)
+                               grid_size_metal::GridSizeMetal, params_metal::ParamsMetal)
     
     max_effective_radius = Float32(max(params_metal.OmpA_radius, params_metal.OmpCF_radius, params_metal.LptD_radius, params_metal.BamA_radius, params_metal.LPS_radius))
     force_kernel(
@@ -333,16 +269,16 @@ function resolve_forces_metal!(force_kernel, agents::AllAgents, system_flat_cpu:
         all_data_metal.agent_cell_z_ixs,
         all_data_metal.num_agents_in_cell,
         all_data_metal.start_agents_in_cell,
-        grid_metal.dims,
-        grid_metal.num_cells,
+        grid_size_metal.dims,
+        grid_size_metal.num_cells,
         max_effective_radius,
         params_metal;
-        ndrange=grid_metal.num_agents
+        ndrange=grid_size_metal.num_agents
     )
     KernelAbstractions.synchronize(MetalBackend())
 
     #copy the new positions out to the cpu
-    copyto!(system_flat_cpu.positions, all_data_metal.next_positions[1:2*grid_metal.num_agents])
+    copyto!(system_flat_cpu.positions, all_data_metal.next_positions[1:2*grid_size_metal.num_agents])
 
     #write new positions into AllAgents structure
     all_agents = Iterators.flatten((agents.OMP.OmpA, agents.OMP.OmpCF, agents.OMP.LptD, agents.OMP.BamA, 
@@ -382,17 +318,9 @@ metal kernel
     # Get sorted index
     sorted_ix = @index(Global)
 
-    #DEBUG: write some crap into next_positions to check kernel results
-    next_positions[2*sorted_ix-1] = 1.0
-    next_positions[2*sorted_ix] = 1.0
-
     #parse this agent's identifier
     identifier = identifiers[sorted_ix]
     is_tethered, agent_type_num, is_nascent, is_inserting, nascent_ix = parse_identifier_metal(identifier)
-
-    #DEBUG: write some crap into next_positions to check kernel results
-    next_positions[2*sorted_ix-1] = 2.0
-    next_positions[2*sorted_ix] = 2.0
 
     #if inserting or nascent, get the substrate/inserting ix so we can ignore it in attraction/repulsion force calculations
     if is_inserting==1
@@ -402,10 +330,6 @@ metal kernel
     else
         sorted_substrate_inserting_ix = -1
     end
-
-        #DEBUG: write some crap into next_positions to check kernel results
-    next_positions[2*sorted_ix-1] = 3.0
-    next_positions[2*sorted_ix] = 3.0
 
     #tally forces acting on this agent (ignore substrate/inserting agent, if one exists)
     resultant_force = tally_attr_rep_forces_metal(

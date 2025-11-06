@@ -26,10 +26,13 @@ struct ParamsMetal
 end
 
 #mutable struct, lives on CPU, holds scalar and small fixed-size vector data from the SimGrid
-mutable struct GridMetal
+#this stuff is small and changes every timestep, so lives on CPU
+mutable struct GridSizeMetal
     dims::SVector{2, Float32}
     num_cells::SVector{2, Int}
+    tot_num_cells::Int
     num_agents::Int
+    has_changed::Bool
 end
 
 

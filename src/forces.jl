@@ -6,13 +6,14 @@
 Top level function to resolve forces on all agents in the system. Runs with multi-threading by
 default, GPU acceleration to be implemented.
 """
-function resolve_forces_cpu!(agents::AllAgents, grid::SimGrid, system_flat::AllAgentsFlat, params::AllParams)
+function resolve_forces_cpu!(agents::AllAgents, grid_size::GridSize, grid::SimGrid, system_flat::AllAgentsFlat, params::AllParams)
     
     # write new positions vector (iteration order keeps nearby agents together)
-    Threads.@threads for sorted_ix = 1:grid.num_agents
+    Threads.@threads for sorted_ix = 1:grid_size.num_agents
         next_position_this_agent = compute_next_position(
             sorted_ix,
             system_flat,
+            grid_size,
             grid,
             params
         )
@@ -41,13 +42,13 @@ end
 Rebuilds the system_flat (`AllAgentsFlat`) structure used for force calculations. Data is read in
 by traversing grid cells in Morton z order for efficiency.
 """
-function compile_flat_system_data_cpu!(system_flat::AllAgentsFlat, agents::AllAgents, grid::SimGrid, params::AllParams)
+function compile_flat_system_data_cpu!(system_flat::AllAgentsFlat, agents::AllAgents, grid_size::GridSize, grid::SimGrid, params::AllParams)
 
     #first, if there are any new agents, check the existing vectors are long enough
     curr_vec_capacity = length(system_flat.identifiers)
-    if grid.num_agents>curr_vec_capacity
+    if grid_size.num_agents>curr_vec_capacity
         size_increase_ratio = 1.25
-        new_vec_size = ceil(Int, size_increase_ratio*curr_vec_capacity)
+        new_vec_size = ceil(Int, size_increase_ratio*grid_size.num_agents)
         resize!(system_flat.positions, 2*new_vec_size)
         resize!(system_flat.next_positions, 2*new_vec_size)
         resize!(system_flat.tether_points, 2*new_vec_size)
@@ -57,15 +58,24 @@ function compile_flat_system_data_cpu!(system_flat::AllAgentsFlat, agents::AllAg
         resize!(system_flat.sorted_ix_to_agent_ix, new_vec_size)
     end
 
+    #if there is an unusually large number of nascent agents, resize nascent-related vectors
+    curr_nascent_capacity = length(system_flat.nascent_to_substrate_ixs)
+    num_nascent = length(agents.nascent.nascent_OMP) + length(agents.nascent.nascent_LPS)
+    if num_nascent > curr_nascent_capacity
+        size_increase_ratio = 1.25
+        new_vec_size = ceil(Int, size_increase_ratio * num_nascent)
+        resize!(system_flat.nascent_to_substrate_ixs, new_vec_size)
+        resize!(system_flat.nascent_to_inserting_ixs, new_vec_size)
+        resize!(system_flat.substrate_inserting_ideal_dists, new_vec_size)
+    end
 
     #build the sorted_ixs vectors:
 
     #traverse grid in Morton z order to populate sorted-unsorted ix maps
     sorted_ix = 1
-    for cell_z_ix=1:prod(grid.num_cells)
-        cell = grid.cells[cell_z_ix]
+    for cell_z_ix=1:grid_size.tot_num_cells
         for local_ix = 1:grid.num_agents_in_cell[cell_z_ix]
-            this_agent_ix = cell.agent_ixs[local_ix]
+            this_agent_ix = grid.agent_ixs_in_cell[cell_z_ix][local_ix]
             system_flat.agent_ix_to_sorted_ix[this_agent_ix] = sorted_ix
             system_flat.sorted_ix_to_agent_ix[sorted_ix] = this_agent_ix
             sorted_ix += 1
@@ -269,7 +279,7 @@ Computes the next position of a specified agent after tallying attraction-repuls
 inserting-substrate forces (if this agent is not inserting something or is being inserted - denoted
 by `substrate_inserting_ix` being negative). Returns the next position as a 2-element vector.
 """
-function compute_next_position(sorted_ix::Int, system_flat::AllAgentsFlat, grid::SimGrid, params::AllParams)
+function compute_next_position(sorted_ix::Int, system_flat::AllAgentsFlat, grid_size::GridSize, grid::SimGrid, params::AllParams)
 
     #parse this agent's identifier
     identifier = system_flat.identifiers[sorted_ix]
@@ -285,7 +295,7 @@ function compute_next_position(sorted_ix::Int, system_flat::AllAgentsFlat, grid:
     end
 
     #tally forces acting on this agent (ignore substrate/inserting agent, if one exists)
-    resultant_force = tally_attr_rep_forces(sorted_ix, sorted_substrate_inserting_ix, grid, system_flat, params)
+    resultant_force = tally_attr_rep_forces(sorted_ix, sorted_substrate_inserting_ix, grid_size, grid, system_flat, params)
 
     #if this agent has a substrate/inserting agent, compute the spring force between them
     if sorted_substrate_inserting_ix>0
@@ -300,7 +310,7 @@ function compute_next_position(sorted_ix::Int, system_flat::AllAgentsFlat, grid:
         resultant_force += compute_inserting_substrate_force(
             agent_pos,
             neigh_pos,
-            grid.dims,
+            grid_size.dims,
             system_flat.substrate_inserting_ideal_dists[nascent_ix],
             params.insertion.mu_attr,
             params.insertion.mu_rep,
@@ -328,7 +338,7 @@ function compute_next_position(sorted_ix::Int, system_flat::AllAgentsFlat, grid:
     #compute proposal position from force sum
     agent_pos = SVector{2, Float64}(system_flat.positions[2*sorted_ix-1], system_flat.positions[2*sorted_ix])
     next_pos = agent_pos + (params.system.dt/(params.force.eta*act_rad))*resultant_force
-    next_pos = mod.(next_pos, grid.dims)
+    next_pos = mod.(next_pos, grid_size.dims)
 
     #check if agent has a tether and if proposal position exceeds tether length
     if is_tethered
@@ -340,7 +350,7 @@ function compute_next_position(sorted_ix::Int, system_flat::AllAgentsFlat, grid:
         else
             error("Tethered agent of type '$agent_type' not supported.")
         end
-        if shortest_distance(next_pos, tether_pos, grid.dims)>tether_length
+        if shortest_distance(next_pos, tether_pos, grid_size.dims)>tether_length
             #make next position same as old position
             next_pos = SVector{2, Float64}(system_flat.positions[2*sorted_ix-1], system_flat.positions[2*sorted_ix])
         end
@@ -357,7 +367,7 @@ end
 Aggregates all attraction-repulsion forces acting on a specific agent. Returns a 2-element vector containing 
 the resultant force on the agent.
 """
-function tally_attr_rep_forces(sorted_ix::Int, sorted_substrate_inserting_ix::Int, grid::SimGrid, system_flat::AllAgentsFlat, params::AllParams)
+function tally_attr_rep_forces(sorted_ix::Int, sorted_substrate_inserting_ix::Int, grid_size::GridSize, grid::SimGrid, system_flat::AllAgentsFlat, params::AllParams)
 
     #initialise
     resultant_force = SVector{2, Float64}(0.0, 0.0)
@@ -370,15 +380,15 @@ function tally_attr_rep_forces(sorted_ix::Int, sorted_substrate_inserting_ix::In
     #calculate how wide around this cell we need to search for neighbours
     max_agent_rad = max(params.OmpA.radius, params.OmpCF.radius, params.BamA.radius, params.LptD.radius, params.LPS.radius)
     agent_buffer_radius = system_flat.effective_radii[sorted_ix] + params.force.sensing_radius + max_agent_rad
-    cell_buffer_num_x, cell_buffer_num_y = ceil.(Int, agent_buffer_radius./(grid.dims./grid.num_cells))
+    cell_buffer_num_x, cell_buffer_num_y = ceil.(Int, agent_buffer_radius./(grid_size.dims./grid_size.num_cells))
 
     #loop over Moore neighbourhood
     for x_shift in -cell_buffer_num_x:cell_buffer_num_x, y_shift in -cell_buffer_num_y:cell_buffer_num_y
 
         #account for periodic boundaries
-        neigh_cell_x = mod(agent_cell_ix + x_shift - 1, grid.num_cells[1]) + 1
-        neigh_cell_y = mod(agent_cell_jx + y_shift - 1, grid.num_cells[2]) + 1
-        neigh_cell_z_ix = grid.coords_to_z_ix[(neigh_cell_y-1)*grid.num_cells[1] + neigh_cell_x]
+        neigh_cell_x = mod(agent_cell_ix + x_shift - 1, grid_size.num_cells[1]) + 1
+        neigh_cell_y = mod(agent_cell_jx + y_shift - 1, grid_size.num_cells[2]) + 1
+        neigh_cell_z_ix = grid.coords_to_z_ix[(neigh_cell_y-1)*grid_size.num_cells[1] + neigh_cell_x]
 
         #loop over agents
         start_agent = grid.start_agents_in_cell[neigh_cell_z_ix]
@@ -412,7 +422,7 @@ function tally_attr_rep_forces(sorted_ix::Int, sorted_substrate_inserting_ix::In
                     system_flat.effective_radii[sorted_ix],
                     neighbour_position,
                     system_flat.effective_radii[sorted_n_ix],
-                    grid.dims,
+                    grid_size.dims,
                     params.force.sensing_radius,
                     mu_attr,
                     params.force.mu_rep,
@@ -528,7 +538,7 @@ end
 Computes the position of all agents following one time step of diffusion. If a proposal move
 takes an agent beyond the tether radius of its tether point, the move is rejected.
 """
-function compute_diffusion!(agents::AllAgents, grid::SimGrid, params::AllParams)
+function compute_diffusion!(agents::AllAgents, grid_size::GridSize, params::AllParams)
 
     #return early if diffusion temperature is too low
     temp_err = 1e-8
@@ -556,9 +566,9 @@ function compute_diffusion!(agents::AllAgents, grid::SimGrid, params::AllParams)
     for OmpA in agents.OMP.OmpA
         proposal_distribution = MvNormal(OmpA.position, diff_cov_OmpA)
         proposal_dest = rand(proposal_distribution)
-        proposal_dest = mod.(proposal_dest, grid.dims)
+        proposal_dest = mod.(proposal_dest, grid_size.dims)
         if OmpA.is_tethered
-            if shortest_distance(proposal_dest, OmpA.tether_point, grid.dims)>params.OmpA.tether_radius
+            if shortest_distance(proposal_dest, OmpA.tether_point, grid_size.dims)>params.OmpA.tether_radius
                 continue
             end
         end
@@ -567,21 +577,21 @@ function compute_diffusion!(agents::AllAgents, grid::SimGrid, params::AllParams)
     for OmpCF in agents.OMP.OmpCF
         proposal_distribution = MvNormal(OmpCF.position, diff_cov_OmpCF)
         proposal_dest = rand(proposal_distribution)
-        proposal_dest = mod.(proposal_dest, grid.dims)
+        proposal_dest = mod.(proposal_dest, grid_size.dims)
         OmpCF.position = proposal_dest
     end
     for BamA in agents.OMP.BamA
         proposal_distribution = MvNormal(BamA.position, diff_cov_BamA)
         proposal_dest = rand(proposal_distribution)
-        proposal_dest = mod.(proposal_dest, grid.dims)
+        proposal_dest = mod.(proposal_dest, grid_size.dims)
         BamA.position = proposal_dest
     end
     for LptD in agents.OMP.LptD
         proposal_distribution = MvNormal(LptD.position, diff_cov_LptD)
         proposal_dest = rand(proposal_distribution)
-        proposal_dest = mod.(proposal_dest, grid.dims)
+        proposal_dest = mod.(proposal_dest, grid_size.dims)
         if LptD.is_tethered
-            if shortest_distance(proposal_dest, LptD.tether_point, grid.dims)>params.LptD.tether_radius
+            if shortest_distance(proposal_dest, LptD.tether_point, grid_size.dims)>params.LptD.tether_radius
                 continue
             end
         end
@@ -590,7 +600,7 @@ function compute_diffusion!(agents::AllAgents, grid::SimGrid, params::AllParams)
     for LPS in agents.LPS
         proposal_distribution = MvNormal(LPS.position, diff_cov_LPS)
         proposal_dest = rand(proposal_distribution)
-        proposal_dest = mod.(proposal_dest, grid.dims)
+        proposal_dest = mod.(proposal_dest, grid_size.dims)
         LPS.position = proposal_dest
     end
     for nascent_OMP in agents.nascent.nascent_OMP
@@ -606,13 +616,13 @@ function compute_diffusion!(agents::AllAgents, grid::SimGrid, params::AllParams)
             error("Nascent OMP type $(nascent_OMP.OMP_type) not recognised.")
         end
         proposal_dest = rand(proposal_distribution)
-        proposal_dest = mod.(proposal_dest, grid.dims)
+        proposal_dest = mod.(proposal_dest, grid_size.dims)
         nascent_OMP.position = proposal_dest
     end
     for nascent_LPS in agents.nascent.nascent_LPS
         proposal_distribution = MvNormal(nascent_LPS.position, diff_cov_LPS)
         proposal_dest = rand(proposal_distribution)
-        proposal_dest = mod.(proposal_dest, grid.dims)
+        proposal_dest = mod.(proposal_dest, grid_size.dims)
         nascent_LPS.position = proposal_dest
     end
 end

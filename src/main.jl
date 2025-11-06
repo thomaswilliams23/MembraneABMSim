@@ -35,15 +35,16 @@ function run_sim(config_pathname::String)
     #intialise the system
     t=0.0
     if device=="cpu"
-        agents, grid, system_flat_cpu = initialise_system_cpu(params)
+        agents, grid_size, grid, system_flat_cpu = initialise_system_cpu(params)
     elseif device=="metal"
         (
-            force_kernel,
+            force_kernel, 
             agents, 
+            grid_size, 
             grid, 
             system_flat_cpu, 
             all_data_metal, 
-            grid_metal,
+            grid_size_metal, 
             params_metal
         ) = initialise_system_metal(params)
     end
@@ -51,7 +52,7 @@ function run_sim(config_pathname::String)
 
     #write out initial state
     time_ix = 0
-    write_system_state(agents, grid.dims, params.system.output_dir, time_ix)
+    write_system_state(agents, grid_size.dims, params.system.output_dir, time_ix)
 
 
     #main loop
@@ -59,34 +60,34 @@ function run_sim(config_pathname::String)
     while t<params.system.t_max - time_err
 
         #update BAM subsystem
-        update_BAM_subsystem!(agents, grid, system_flat_cpu, params, t)
+        update_BAM_subsystem!(agents, grid_size, grid, system_flat_cpu, params, t)
 
         #update Lpt subsystem
-        update_Lpt_subsystem!(agents, grid, params, t)
+        update_Lpt_subsystem!(agents, grid_size, params, t)
 
         #check for any new tethering or assembly
         update_tethering_and_assembly!(agents, params)
 
         #update any nascent agents
         update_nascent_agents!(agents, params, t)
-
+        
         #rescale the domain and every agent's position
-        rescale_domain!(agents, grid, params, nascent_added_area_lookup, t)
+        rescale_domain!(agents, grid_size, params, nascent_added_area_lookup, t)
 
         #compute diffusion of every agent
-        compute_diffusion!(agents, grid, params)
+        compute_diffusion!(agents, grid_size, params)
 
         #update the grid and flat system data
-        rebuild_grid!(grid, agents, params.force.sensing_radius)
-        compile_flat_system_data_cpu!(system_flat_cpu, agents, grid, params)
-        put_grid_in_sorted_order!(grid, system_flat_cpu)
+        rebuild_grid!(grid_size, grid, agents, params.force.sensing_radius)
+        compile_flat_system_data_cpu!(system_flat_cpu, agents, grid_size, grid, params)
+        put_grid_in_sorted_order!(grid_size, grid, system_flat_cpu)
 
         #resolve inter-agent forces
         if device=="cpu"
-            resolve_forces_cpu!(agents, grid, system_flat_cpu, params)
+            resolve_forces_cpu!(agents, grid_size, grid, system_flat_cpu, params)
         elseif device=="metal"
-            copy_data_to_metal!(all_data_metal, grid_metal, system_flat_cpu, grid)
-            resolve_forces_metal!(force_kernel, agents, system_flat_cpu, all_data_metal, grid_metal, params_metal)
+            copy_data_to_metal!(all_data_metal, grid_size_metal, system_flat_cpu, grid_size, grid)
+            resolve_forces_metal!(force_kernel, agents, system_flat_cpu, all_data_metal, grid_size_metal, params_metal)
         end
 
         #step time
@@ -96,7 +97,7 @@ function run_sim(config_pathname::String)
         #optionally write out data
         if abs(t/params.system.vis_dt - round(t/params.system.vis_dt))<time_err
             time_ix = round(Int, t/params.system.vis_dt)
-            write_system_state(agents, grid.dims, params.system.output_dir, time_ix)
+            write_system_state(agents, grid_size.dims, params.system.output_dir, time_ix)
 
             @printf "Running: t=%5.2f\r" t
         end

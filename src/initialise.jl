@@ -23,23 +23,23 @@ function initialise_system_cpu(params::AllParams)
     # decide which initialisation to use
     if params.init.method == "random"
         println("Initialising model with random distribution of agents...")
-        agents, grid, system_flat_cpu = initialise_system_random(params)
+        agents, grid_size, grid, system_flat_cpu = initialise_system_random(params)
     else
         #TODO: implement other initialisation methods?
         error("Initialisation type $(params.initialisation.init_type) not recognised.")
     end
 
     # return the initialised model (placeholder for now)
-    return (agents, grid, system_flat_cpu)
+    return (agents, grid_size, grid, system_flat_cpu)
 end
 
 
 """
-    initialise_grid(params::AllParams) -> SimGrid
+    initialise_grid(params::AllParams)
 
 Initialises a spatial grid for the simulation based on the parameters provided.
 """
-function initialise_grid(params::AllParams) :: SimGrid
+function initialise_grid(params::AllParams)
     
     # get dimensions and cell size from params
     dims = SVector{2, Float64}(params.init.dim_x, params.init.dim_y)
@@ -56,37 +56,38 @@ function initialise_grid(params::AllParams) :: SimGrid
         params.init.num_LPS
     )
 
-    # create empty cells
-    cell_width = params.force.sensing_radius
-    num_cells = SVector{2, Int}(ceil.(Int, dims./cell_width))
-    cells_init = Vector{SimCell}(undef, prod(num_cells))
-    for cell_z_ix = 1:prod(num_cells)
-        agent_ixs_init = Int[]
-        cells_init[cell_z_ix] = SimCell(
-            cell_z_ix,
-            agent_ixs_init
-        )
-    end
+    has_changed_init = true
 
-    #rest of the fields are empty - we do this on the first call to update_grid!
+    #grid_size object
+    grid_size = GridSize(
+        dims,
+        num_cells_init,
+        prod(num_cells_init),
+        num_agents_init,
+        has_changed_init
+    )
+
+
+    #make grid object (mostly empty for now, gets filled on first update)
     coords_to_z_ix = Int[]
     z_ix_to_coords = Int[]
     agent_cell_z_ixs_init = Int[]
+    agent_ixs_in_cell_init = Vector{Int}[]
     num_agents_in_cell = Int[]
     start_agents_in_cell = Int[]
-    has_changed_init = true
 
-    return SimGrid(
-        dims,
-        num_cells_init,
-        num_agents_init,  
+    grid =  SimGrid(
         coords_to_z_ix,
         z_ix_to_coords,
         agent_cell_z_ixs_init, 
+        agent_ixs_in_cell_init,
         num_agents_in_cell,
         start_agents_in_cell,
-        cells_init,
-        has_changed_init
+    )
+
+    return (
+        grid_size,
+        grid
     )
 end
 
@@ -135,6 +136,98 @@ function initialise_flat_cpu(params::AllParams) :: AllAgentsFlat
         sorted_ix_to_agent_ix
     )
 end
+
+
+
+"""
+initialise agents
+"""
+function initialise_agents(grid_size::GridSize, params::AllParams)
+
+    #initialisation defaults
+    init_agent_arrival_time = -Inf     #init objects assumed to have arrived at -Inf
+
+    is_tethered_init = false           #all agents initialised as untethered
+    tether_point_init = 0.0            #all agents initialised as untethered
+    is_assembled_init = false          #all agents initialised as unassembled
+    insertion_state_init = "free"      #all agents initialised in the "free" state
+
+    nascent_OMPs_init = Vector{NascentOMPAgent}()
+                                       #no initial nascent objects
+    nascent_LPS_init = Vector{NascentLPSAgent}()
+                                       #no initial nascent objects
+
+    #initialise agents and package them
+    num_agents_allocated_so_far = 0
+    all_OmpAs = [
+        OmpAAgent(
+            ix + num_agents_allocated_so_far,
+            SVector{2, Float64}(rand() * grid_size.dims[1], rand() * grid_size.dims[2]),
+            init_agent_arrival_time, 
+            is_tethered_init, 
+            SVector{2, Float64}(tether_point_init, tether_point_init)
+        )
+        for ix in 1:params.init.num_OmpA
+    ]
+
+    num_agents_allocated_so_far += params.init.num_OmpA
+    all_OmpCFs = [
+        OmpCFAgent(
+            ix + num_agents_allocated_so_far,
+            SVector{2, Float64}(rand() * grid_size.dims[1], rand() * grid_size.dims[2]),
+            init_agent_arrival_time
+        )
+        for ix in 1:params.init.num_OmpCF
+    ]
+
+    num_agents_allocated_so_far += params.init.num_OmpCF
+    all_LptDs = [
+        LptDAgent(
+            ix + num_agents_allocated_so_far,
+            SVector{2, Float64}(rand() * grid_size.dims[1], rand() * grid_size.dims[2]),
+            init_agent_arrival_time, 
+            is_tethered_init, 
+            SVector{2, Float64}(tether_point_init, tether_point_init), 
+            is_assembled_init, 
+            insertion_state_init
+        )
+        for ix in 1:params.init.num_LptD
+    ]
+
+    num_agents_allocated_so_far += params.init.num_LptD
+    all_BamAs = [
+        BamAAgent(
+            ix + num_agents_allocated_so_far,
+            SVector{2, Float64}(rand() * grid_size.dims[1], rand() * grid_size.dims[2]),
+            init_agent_arrival_time, 
+            is_assembled_init, 
+            insertion_state_init
+        )
+        for ix in 1:params.init.num_BamA
+    ]
+
+    num_agents_allocated_so_far += params.init.num_BamA
+    all_LPS = [
+        LPSAgent(
+            ix + num_agents_allocated_so_far,
+            SVector{2, Float64}(rand() * grid_size.dims[1], rand() * grid_size.dims[2]),
+            init_agent_arrival_time
+        )
+        for ix in 1:params.init.num_LPS
+    ]
+
+    num_PP_init = params.init.num_PP
+    agents = AllAgents(
+        AllOMPs(all_OmpAs, all_OmpCFs, all_LptDs, all_BamAs),
+        all_LPS,
+        AllNascent(nascent_OMPs_init, nascent_LPS_init),
+        num_PP_init
+    )
+
+    return agents
+end
+
+
 
 
 """
@@ -294,98 +387,20 @@ to resolve positions.
 """
 function initialise_system_random(params::AllParams)
 
-    #initialise spatial grid and flat structure for force calculation
-    grid = initialise_grid(params)
+    #initialise simulation objects
+    grid_size, grid = initialise_grid(params)
     system_flat_cpu = initialise_flat_cpu(params)
-
-    #initialisation defaults
-    init_agent_arrival_time = -Inf     #init objects assumed to have arrived at -Inf
-
-    is_tethered_init = false           #all agents initialised as untethered
-    tether_point_init = 0.0            #all agents initialised as untethered
-    is_assembled_init = false          #all agents initialised as unassembled
-    insertion_state_init = "free"      #all agents initialised in the "free" state
-
-    nascent_OMPs_init = Vector{NascentOMPAgent}()
-                                       #no initial nascent objects
-    nascent_LPS_init = Vector{NascentLPSAgent}()
-                                       #no initial nascent objects
-
-    #initialise agents and package them
-    num_agents_allocated_so_far = 0
-    all_OmpAs = [
-        OmpAAgent(
-            ix + num_agents_allocated_so_far,
-            SVector{2, Float64}(rand() * grid.dims[1], rand() * grid.dims[2]),
-            init_agent_arrival_time, 
-            is_tethered_init, 
-            SVector{2, Float64}(tether_point_init, tether_point_init)
-        )
-        for ix in 1:params.init.num_OmpA
-    ]
-
-    num_agents_allocated_so_far += params.init.num_OmpA
-    all_OmpCFs = [
-        OmpCFAgent(
-            ix + num_agents_allocated_so_far,
-            SVector{2, Float64}(rand() * grid.dims[1], rand() * grid.dims[2]),
-            init_agent_arrival_time
-        )
-        for ix in 1:params.init.num_OmpCF
-    ]
-
-    num_agents_allocated_so_far += params.init.num_OmpCF
-    all_LptDs = [
-        LptDAgent(
-            ix + num_agents_allocated_so_far,
-            SVector{2, Float64}(rand() * grid.dims[1], rand() * grid.dims[2]),
-            init_agent_arrival_time, 
-            is_tethered_init, 
-            SVector{2, Float64}(tether_point_init, tether_point_init), 
-            is_assembled_init, 
-            insertion_state_init
-        )
-        for ix in 1:params.init.num_LptD
-    ]
-
-    num_agents_allocated_so_far += params.init.num_LptD
-    all_BamAs = [
-        BamAAgent(
-            ix + num_agents_allocated_so_far,
-            SVector{2, Float64}(rand() * grid.dims[1], rand() * grid.dims[2]),
-            init_agent_arrival_time, 
-            is_assembled_init, 
-            insertion_state_init
-        )
-        for ix in 1:params.init.num_BamA
-    ]
-
-    num_agents_allocated_so_far += params.init.num_BamA
-    all_LPS = [
-        LPSAgent(
-            ix + num_agents_allocated_so_far,
-            SVector{2, Float64}(rand() * grid.dims[1], rand() * grid.dims[2]),
-            init_agent_arrival_time
-        )
-        for ix in 1:params.init.num_LPS
-    ]
-
-    num_PP_init = params.init.num_PP
-    agents = AllAgents(
-        AllOMPs(all_OmpAs, all_OmpCFs, all_LptDs, all_BamAs),
-        all_LPS,
-        AllNascent(nascent_OMPs_init, nascent_LPS_init),
-        num_PP_init
-    )
+    agents = initialise_agents(grid_size, params)
+    
 
     #run equilibration
     t = 0.0
     time_err = 0.1 * params.system.dt
     while t < params.init.equilibration_time - time_err
-        rebuild_grid!(grid, agents, params.force.sensing_radius)
-        compile_flat_system_data_cpu!(system_flat_cpu, agents, grid, params)
-        put_grid_in_sorted_order!(grid, system_flat_cpu)
-        resolve_forces_cpu!(agents, grid, system_flat_cpu, params)
+        rebuild_grid!(grid_size, grid, agents, params.force.sensing_radius)
+        compile_flat_system_data_cpu!(system_flat_cpu, agents, grid_size, grid, params)
+        put_grid_in_sorted_order!(grid_size, grid, system_flat_cpu)
+        resolve_forces_cpu!(agents, grid_size, grid, system_flat_cpu, params)
         t += params.system.dt
 
 
@@ -401,7 +416,7 @@ function initialise_system_random(params::AllParams)
         assemble_all_agents!(agents)
     end
 
-    return (agents, grid, system_flat_cpu)
+    return (agents, grid_size, grid, system_flat_cpu)
 end
 
 
