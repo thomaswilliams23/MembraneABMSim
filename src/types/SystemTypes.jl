@@ -7,6 +7,7 @@ mutable struct AllAgentsFlat
     effective_radii::Vector{Float64}
     identifiers::Vector{Int}
     tether_points::Vector{Float64}
+    agg_dist_since_grid_sync::Vector{Float64}
     nascent_to_inserting_ixs::Vector{Int}
     nascent_to_substrate_ixs::Vector{Int}
     substrate_inserting_ideal_dists::Vector{Float64}
