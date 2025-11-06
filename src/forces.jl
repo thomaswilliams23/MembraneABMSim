@@ -4,7 +4,7 @@
     resolve_forces_cpu!(grid::SimGrid, agents::AllAgents, params::AllParams)
 
 Top level function to resolve forces on all agents in the system. Runs with multi-threading by
-default, GPU acceleration to be implemented.
+default, on the GPU as an option.
 """
 function resolve_forces_cpu!(agents::AllAgents, grid_size::GridSize, grid::SimGrid, system_flat::AllAgentsFlat, params::AllParams)
     
@@ -381,6 +381,10 @@ function tally_attr_rep_forces(sorted_ix::Int, sorted_substrate_inserting_ix::In
     max_agent_rad = max(params.OmpA.radius, params.OmpCF.radius, params.BamA.radius, params.LptD.radius, params.LPS.radius)
     agent_buffer_radius = system_flat.effective_radii[sorted_ix] + params.force.sensing_radius + max_agent_rad
     cell_buffer_num_x, cell_buffer_num_y = ceil.(Int, agent_buffer_radius./(grid_size.dims./grid_size.num_cells))
+
+    #cap buffers to avoid double-searching
+    cell_buffer_num_x = min(cell_buffer_num_x, ceil(Int, grid_size.num_cells[1] / 2))
+    cell_buffer_num_y = min(cell_buffer_num_y, ceil(Int, grid_size.num_cells[2] / 2))
 
     #loop over Moore neighbourhood
     for x_shift in -cell_buffer_num_x:cell_buffer_num_x, y_shift in -cell_buffer_num_y:cell_buffer_num_y

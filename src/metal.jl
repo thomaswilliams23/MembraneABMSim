@@ -451,6 +451,9 @@ end
     # Replace ceil with manual ceiling calculation
     cell_buffer_num_x = fast_floor_int32(agent_buffer_radius/(dims[1]/num_cells[1])) + 1
     cell_buffer_num_y = fast_floor_int32(agent_buffer_radius/(dims[2]/num_cells[2])) + 1
+    #cap buffers to avoid double-searching
+    cell_buffer_num_x = min(cell_buffer_num_x, div(num_cells[1], 2)+1)
+    cell_buffer_num_y = min(cell_buffer_num_y, div(num_cells[2], 2)+1)
 
     #loop over Moore neighbourhood - replace range-based loop with explicit loops
     x_shift = -cell_buffer_num_x
