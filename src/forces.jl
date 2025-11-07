@@ -97,7 +97,6 @@ function compile_flat_system_data_cpu!(system_flat::AllAgentsFlat, agents::AllAg
     #build data vectors:
 
     #loop through all the agents and populate vectors (janky for SPEED)
-    inserting_ix_counter = 1
     nascent_ix_counter = 1
     untethered_val = 0.0
     for agent in agents.OMP.OmpA
@@ -151,16 +150,8 @@ function compile_flat_system_data_cpu!(system_flat::AllAgentsFlat, agents::AllAg
                 is_nascent=false, 
                 nascent_ix=0
             )
-        else
-            system_flat.identifiers[sorted_ix] = make_identifier(;
-                is_tethered=false, 
-                agent_type="BamA", 
-                is_inserting=true, 
-                is_nascent=false, 
-                nascent_ix=inserting_ix_counter
-            )
-            inserting_ix_counter += 1
         end
+        # otherwise, we will set the identifier when we process nascent agents
     end
     for agent in agents.OMP.LptD
 
@@ -179,16 +170,8 @@ function compile_flat_system_data_cpu!(system_flat::AllAgentsFlat, agents::AllAg
                 is_nascent=false, 
                 nascent_ix=0
             )
-        else
-            system_flat.identifiers[sorted_ix] = make_identifier(;
-                is_tethered=agent.is_tethered, 
-                agent_type="LptD", 
-                is_inserting=true, 
-                is_nascent=false, 
-                nascent_ix=inserting_ix_counter
-            )
-            inserting_ix_counter += 1
         end
+        # otherwise, we will set the identifier when we process nascent agents
     end
     for agent in agents.LPS
 
@@ -259,14 +242,9 @@ function compile_flat_system_data_cpu!(system_flat::AllAgentsFlat, agents::AllAg
 
         #make identifier for the inserting agent too
         inserting_agent_sorted_index = system_flat.agent_ix_to_sorted_ix[agent.inserting_agent_index]
-        if system_flat.identifiers[inserting_agent_sorted_index] < 0
-            inserting_agent_tethered = true
-        else
-            inserting_agent_tethered = false
-        end
         system_flat.identifiers[inserting_agent_sorted_index] = make_identifier(;
-            is_tethered=inserting_agent_tethered, 
-            agent_type="LPS",
+            is_tethered=true, 
+            agent_type="LptD",
             is_inserting=true, 
             is_nascent=false, 
             nascent_ix=nascent_ix_counter

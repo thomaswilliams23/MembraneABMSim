@@ -43,15 +43,27 @@ function update_BAM_subsystem!(agents::AllAgents, grid_size::GridSize, grid::Sim
                     elseif params.insertion.type == "lipid-dependent"
                         insertion_accepted = false
 
-                        #iterate over agents in the Moore neighbourhood to see if there are any LPS
+                        #find this BamA's sorted index
                         sorted_ix = system_flat.agent_ix_to_sorted_ix[BamA.index]
+
+                        #find grid coords
                         cell_z_ix = grid.agent_cell_z_ixs[sorted_ix]
                         cell_x = grid.z_ix_to_coords[2*cell_z_ix-1]
                         cell_y = grid.z_ix_to_coords[2*cell_z_ix]
+
+                        #get a buffer based on agent radii and sensing radius
                         agent_buffer_radius = params.BamA.radius + params.force.sensing_radius + params.LPS.radius
+                        
+                        #add error to account for agent movement since last grid sync
+                        this_agent_agg_dist = system_flat.agg_dist_since_grid_sync[sorted_ix]
+                        agent_buffer_radius += maximum(system_flat.agg_dist_since_grid_sync) + this_agent_agg_dist
+                        
+                        #convert to grid cell counts
                         cell_buffer_num_x, cell_buffer_num_y = ceil.(Int, agent_buffer_radius./(grid_size.dims./grid_size.num_cells))
                         cell_buffer_num_x = min(cell_buffer_num_x, ceil(Int, grid_size.num_cells[1] / 2))
                         cell_buffer_num_y = min(cell_buffer_num_y, ceil(Int, grid_size.num_cells[2] / 2))
+                        
+                        #loop over the neighbourhood to find LPS
                         for x_shift=-cell_buffer_num_x:cell_buffer_num_x, y_shift=-cell_buffer_num_y:cell_buffer_num_y
                             neigh_cell_x = mod(cell_x + x_shift -1, grid_size.num_cells[1])+1
                             neigh_cell_y = mod(cell_y + y_shift -1, grid_size.num_cells[2])+1
@@ -242,13 +254,13 @@ function generate_nascent_OMP_obj!(agents::AllAgents, grid_size::GridSize, BamA:
         BamA.index
     )
 
-
     #push to AllAgents structure
     push!(agents.nascent.nascent_OMP, new_nascent_OMP)
 
-    #update grid
+    #update grid size
     grid_size.num_agents += 1
 end
+
 
 
 """
