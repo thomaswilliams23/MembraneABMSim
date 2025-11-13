@@ -272,12 +272,13 @@ function compute_next_position(sorted_ix::Int, system_flat::AllAgentsFlat, grid_
 
     #parse this agent's identifier
     identifier = system_flat.identifiers[sorted_ix]
+
     is_tethered, agent_type, is_nascent, is_inserting, nascent_ix = parse_identifier(identifier)
 
     #if inserting or nascent, get the substrate/inserting ix so we can ignore it in attraction/repulsion force calculations
-    if is_inserting
+    if is_inserting==1
         sorted_substrate_inserting_ix = system_flat.nascent_to_substrate_ixs[nascent_ix]
-    elseif is_nascent
+    elseif is_nascent==1
         sorted_substrate_inserting_ix = system_flat.nascent_to_inserting_ixs[nascent_ix]
     else
         sorted_substrate_inserting_ix = -1
@@ -308,7 +309,7 @@ function compute_next_position(sorted_ix::Int, system_flat::AllAgentsFlat, grid_
     end
 
     #get actual radius
-    if is_nascent && agent_type != "LPS"
+    if is_nascent == 1 && agent_type != "LPS"
         if agent_type == "OmpA"
             act_rad = params.OmpA.radius
         elseif agent_type == "OmpCF"
@@ -401,6 +402,7 @@ function tally_attr_rep_forces(sorted_ix::Int, sorted_substrate_inserting_ix::In
         #loop over agents
         start_agent = grid.start_agents_in_cell[neigh_cell_z_ix]
         num_agents = grid.num_agents_in_cell[neigh_cell_z_ix]
+
         for sorted_n_ix = start_agent:(start_agent + num_agents - 1)
             #avoid self-interaction and attr-rep forces between substrate-inserting pairs
             if sorted_n_ix!=sorted_ix && sorted_n_ix!=sorted_substrate_inserting_ix
@@ -484,13 +486,13 @@ function compute_attr_rep_force(agent_pos::SVector{2, Float64}, agent_rad::Float
         if dist<=rho*ideal_dist
             force_mag = max_repulsion
         elseif dist<ideal_dist && dist>rho*ideal_dist
-            force_mag = mu_rep*ideal_dist*log((dist-rho*ideal_dist)/(1-rho*ideal_dist))
+            force_mag = mu_rep*ideal_dist*log((dist-rho*ideal_dist)/(1.0-rho)*ideal_dist)
             if force_mag < max_repulsion
                 force_mag = max_repulsion
             end
         #attraction
         else
-            norm_dist = (dist - ideal_dist)/((1-rho)*ideal_dist)
+            norm_dist = (dist - ideal_dist)/((1.0-rho)*ideal_dist)
             force_mag = mu_attr*ideal_dist*norm_dist*exp(-k_C*norm_dist)
         end
         force = (force_mag/dist)*force_vec

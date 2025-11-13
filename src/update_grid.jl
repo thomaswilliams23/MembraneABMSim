@@ -16,11 +16,11 @@ function rebuild_grid!(grid_size::GridSize, grid::SimGrid, agents::AllAgents, se
     act_cell_width = grid_size.dims./num_cells
 
     #if grid size has changed, rebuild the grid
-    grid_size.has_changed = false
+    grid_size.grid_size_changed = false
     if num_cells != grid_size.num_cells
 
         #flag that grid has changed
-        grid_size.has_changed = true
+        grid_size.grid_size_changed = true
 
         #rebuild grid fields
         grid_size.num_cells = num_cells
@@ -82,6 +82,9 @@ function rebuild_grid!(grid_size::GridSize, grid::SimGrid, agents::AllAgents, se
         end
     end
 
+    #reset num_agents_changed flag
+    grid_size.num_agents_changed = false
+
 end
 
 
@@ -94,10 +97,66 @@ nascent object area this time step). Computation of this is trivial with the aid
 for nascent added area over the duration of insertion. Once calculated, rescales the grid (membrane) 
 dimensions to add that amount of area, and dilates the position of all agents proportionally.
 """
-function rescale_domain!(agents::AllAgents, grid_size::GridSize, params::AllParams, 
+function rescale_domain!(agents::AllAgents, system_flat::AllAgentsFlat, grid_size::GridSize, params::AllParams, 
                          nascent_added_area_lookup::NascentAddedAreaLookup, t::Float64)
 
-    #first tally added area this time step
+    #compute total added area this timestep
+    added_area_this_timestep = compute_added_area(agents, params, nascent_added_area_lookup, t)
+
+    #return early if no area added
+    added_area_err = 1e-10
+    if added_area_this_timestep<added_area_err
+        return
+    end
+
+    #compute scale factor
+    prev_area = prod(grid_size.dims)
+    scaled_added_area = added_area_this_timestep/params.system.density
+    scale_factor = sqrt((prev_area + scaled_added_area)/prev_area)
+
+    #iterate through each agent and rescale position (if has tether, preserve tether to agent vector)
+    for untethered_agent in Iterators.flatten((agents.OMP.OmpCF, agents.OMP.BamA, agents.LPS, agents.nascent.nascent_OMP, agents.nascent.nascent_LPS))
+        #update position as agent property
+        untethered_agent.position = untethered_agent.position * scale_factor
+        #update the position in the flat data structure
+        sorted_ix = system_flat.agent_ix_to_sorted_ix[untethered_agent.index]
+        system_flat.positions[2*sorted_ix-1] = untethered_agent.position[1]
+        system_flat.positions[2*sorted_ix] = untethered_agent.position[2]
+    end
+    for tethered_agent in Iterators.flatten((agents.OMP.OmpA, agents.OMP.LptD))
+        #compute agent-to-tether vector if tethered
+        if tethered_agent.is_tethered
+            agent_to_tether_vec = shortest_vec(tethered_agent.position, tethered_agent.tether_point, grid_size.dims)
+        end
+        #update position as agent property
+        tethered_agent.position = tethered_agent.position * scale_factor
+        #update the position in the flat data structure
+        sorted_ix = system_flat.agent_ix_to_sorted_ix[tethered_agent.index]
+        system_flat.positions[2*sorted_ix-1] = tethered_agent.position[1]
+        system_flat.positions[2*sorted_ix] = tethered_agent.position[2]
+        #if tethered, update tether point to preserve agent-to-tether vector
+        if tethered_agent.is_tethered
+            #update tether point as agent property
+            tethered_agent.tether_point = tethered_agent.position + agent_to_tether_vec
+            #also update the tether point in the flat data structure
+            sorted_ix = system_flat.agent_ix_to_sorted_ix[tethered_agent.index]
+            system_flat.tether_points[2*sorted_ix-1] = tethered_agent.tether_point[1]
+            system_flat.tether_points[2*sorted_ix] = tethered_agent.tether_point[2]
+        end
+    end
+
+    #update dims
+    grid_size.dims *= scale_factor
+end
+
+
+
+"""
+compute added area
+"""
+function compute_added_area(agents::AllAgents, params::AllParams, 
+                                nascent_added_area_lookup::NascentAddedAreaLookup, t::Float64)
+
     added_area_this_timestep = 0.0
     for nascent_OMP in agents.nascent.nascent_OMP
         time_since_insertion = t - nascent_OMP.arrival_time
@@ -119,60 +178,7 @@ function rescale_domain!(agents::AllAgents, grid_size::GridSize, params::AllPara
         time_ix = round(Int, time_since_insertion/params.system.dt) + 1
         added_area_this_timestep += nascent_added_area_lookup.LPS[time_ix]
     end
-
-
-    #return early if no area added
-    added_area_err = 1e-10
-    if added_area_this_timestep<added_area_err
-        return
-    end
-
-    #compute scale factor
-    prev_area = prod(grid_size.dims)
-    scaled_added_area = added_area_this_timestep/params.system.density
-    scale_factor = sqrt((prev_area + scaled_added_area)/prev_area)
-
-    #iterate through each agent and rescale position (if has tether, preserve tether to agent vector)
-    not_tethered = false
-    for untethered_agent in Iterators.flatten((agents.OMP.OmpCF, agents.OMP.BamA, agents.LPS, agents.nascent.nascent_OMP, agents.nascent.nascent_LPS))
-        rescale_agent!(untethered_agent, grid_size.dims, scale_factor, not_tethered)
-    end
-    for tethered_agent in Iterators.flatten((agents.OMP.OmpA, agents.OMP.LptD))
-        rescale_agent!(tethered_agent, grid_size.dims, scale_factor, tethered_agent.is_tethered)
-    end
-
-    #update dims
-    grid_size.dims *= scale_factor
-end
-
-
-"""
-    rescale_agent!(agent::AbstractAgent, old_dims::SVector{2, Float64}, scale_factor::Float64, has_tether::Bool)
-
-Dilates the position of an agent following rescaling by a given `scale_factor`. If the agent has
-a tether, the tether point is moved to maintain a fixed vector to the agent's position following
-rescaling.
-"""
-function rescale_agent!(agent::AbstractAgent, old_dims::SVector{2, Float64}, scale_factor::Float64, has_tether::Bool)
-
-    #if this agent has a tether, compute the vector between the agent and its tether
-    if has_tether
-
-        if typeof(agent.tether_point)==Vector{Float64}
-            println("Offending agent:")
-            println(agent)
-        end 
-
-        agent_to_tether_vec = shortest_vec(agent.position, agent.tether_point, old_dims)
-    end
-
-    #rescale agent position
-    agent.position = agent.position * scale_factor
-
-    #if the agent has a tether, move it
-    if has_tether
-        agent.tether_point = agent.position + agent_to_tether_vec
-    end
+    return added_area_this_timestep
 end
 
 

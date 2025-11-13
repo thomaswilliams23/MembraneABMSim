@@ -109,7 +109,8 @@ function update_BAM_subsystem!(agents::AllAgents, grid_size::GridSize, grid::Sim
 
                 #find the corresponding substrate (works because we only have a few nascent agents at a time)
                 #TODO improve?
-                for (nascent_ix, nascent_OMP) in enumerate(agents.nascent.nascent_OMP)
+                nascent_OMP_ixs_to_delete = Int[]
+                for (nascent_OMP_ix, nascent_OMP) in enumerate(agents.nascent.nascent_OMP)
 
                     if nascent_OMP.inserting_agent_index == BamA.index
 
@@ -131,8 +132,7 @@ function update_BAM_subsystem!(agents::AllAgents, grid_size::GridSize, grid::Sim
                         time_since_insertion = t - nascent_OMP.arrival_time
                         if time_since_insertion > insertion_time + time_err
                             
-                            #make a new agent out of this nascent agent
-                            arrival_time_init = 0.0
+                            #make a new agent out of this nascent agent and update its identifier
                             is_tethered_init = false
                             tether_point_init = SVector{2, Float64}(0.0, 0.0)
                             is_assembled_init = false
@@ -141,55 +141,103 @@ function update_BAM_subsystem!(agents::AllAgents, grid_size::GridSize, grid::Sim
                                 new_OmpA = OmpAAgent(
                                     nascent_OMP.index,
                                     nascent_OMP.position,
-                                    arrival_time_init,
+                                    nascent_OMP.arrival_time,
                                     is_tethered_init,
                                     tether_point_init
                                 )
                                 push!(agents.OMP.OmpA, new_OmpA)
+                                sorted_ix = system_flat.agent_ix_to_sorted_ix[nascent_OMP.index]
+                                system_flat.identifiers[sorted_ix] = make_identifier(;
+                                    is_tethered=false, 
+                                    agent_type="OmpA", 
+                                    is_inserting=false, 
+                                    is_nascent=false,
+                                    nascent_ix=0
+                                )
                             elseif nascent_OMP.OMP_type=="OmpCF"
                                 new_OmpCF = OmpCFAgent(
                                     nascent_OMP.index,
                                     nascent_OMP.position,
-                                    arrival_time_init
+                                    nascent_OMP.arrival_time
                                 )
                                 push!(agents.OMP.OmpCF, new_OmpCF)
+                                sorted_ix = system_flat.agent_ix_to_sorted_ix[nascent_OMP.index]
+                                system_flat.identifiers[sorted_ix] = make_identifier(;
+                                    is_tethered=false, 
+                                    agent_type="OmpCF", 
+                                    is_inserting=false, 
+                                    is_nascent=false,
+                                    nascent_ix=0
+                                )
                             elseif nascent_OMP.OMP_type=="BamA"
                                 new_BamA = BamAAgent(
                                     nascent_OMP.index,
                                     nascent_OMP.position,
-                                    arrival_time_init,
+                                    nascent_OMP.arrival_time,
                                     is_assembled_init,
                                     insertion_state_init,
                                 )
                                 push!(agents.OMP.BamA, new_BamA)
+                                sorted_ix = system_flat.agent_ix_to_sorted_ix[nascent_OMP.index]
+                                system_flat.identifiers[sorted_ix] = make_identifier(;
+                                    is_tethered=false, 
+                                    agent_type="BamA", 
+                                    is_inserting=false, 
+                                    is_nascent=false,
+                                    nascent_ix=0
+                                )
                             elseif nascent_OMP.OMP_type=="LptD"
                                 new_LptD = LptDAgent(
                                     nascent_OMP.index,
                                     nascent_OMP.position,
-                                    arrival_time_init,
+                                    nascent_OMP.arrival_time,
                                     is_tethered_init,
                                     tether_point_init,
                                     is_assembled_init,
                                     insertion_state_init,
                                 )
                                 push!(agents.OMP.LptD, new_LptD)
+                                sorted_ix = system_flat.agent_ix_to_sorted_ix[nascent_OMP.index]
+                                system_flat.identifiers[sorted_ix] = make_identifier(;
+                                    is_tethered=false, 
+                                    agent_type="LptD", 
+                                    is_inserting=false, 
+                                    is_nascent=false,
+                                    nascent_ix=0
+                                )
                             else
                                 error("OMP type $(nascent_OMP.OMP_type) not recognised.")
                             end
 
-                            #delete the nascent agent
-                            deleteat!(agents.nascent.nascent_OMP, nascent_ix)
-
                             #update the BamA
                             BamA.insertion_state = "free"
-                        end
 
+                            #and its identifier
+                            inserting_sorted_ix = system_flat.agent_ix_to_sorted_ix[BamA.index]
+                            system_flat.identifiers[inserting_sorted_ix] = make_identifier(;
+                                is_tethered=false, 
+                                agent_type="BamA", 
+                                is_inserting=false, 
+                                is_nascent=false,
+                                nascent_ix=0
+                            )
+
+                            #mark this nascent agent for deletion
+                            push!(nascent_OMP_ixs_to_delete, nascent_OMP_ix)
+                        end
 
                         break
                     end
                 end
 
+                #delete the nascent agents which have been promoted
+                deleteat!(agents.nascent.nascent_OMP, nascent_OMP_ixs_to_delete)
 
+                #now update identifiers of all nascent agents and their inserting agents (since their nascent_ix has changed)
+                if length(nascent_OMP_ixs_to_delete)>0
+                    update_flat_data_nascent_agents!(agents, system_flat)
+                    grid_size.nascent_promoted = true
+                end
             end
         end
     end
@@ -199,6 +247,76 @@ function update_BAM_subsystem!(agents::AllAgents, grid_size::GridSize, grid::Sim
     agents.num_PP += rand(PP_arrival_dist)
 
 end
+
+
+
+"""
+update nascent data in flat structure
+"""
+function update_flat_data_nascent_agents!(agents::AllAgents, system_flat::AllAgentsFlat)
+
+    #update identifiers
+    nascent_ix = 1
+    for nascent_OMP in agents.nascent.nascent_OMP
+        #update identifier
+        sorted_ix = system_flat.agent_ix_to_sorted_ix[nascent_OMP.index]
+        system_flat.identifiers[sorted_ix] = make_identifier(;
+            is_tethered=false, 
+            agent_type=nascent_OMP.OMP_type, 
+            is_inserting=false, 
+            is_nascent=true,
+            nascent_ix=nascent_ix
+        )
+
+        #update inserting agent identifier too
+        inserting_agent_index = nascent_OMP.inserting_agent_index
+        inserting_agent_sorted_ix = system_flat.agent_ix_to_sorted_ix[inserting_agent_index]
+        system_flat.identifiers[inserting_agent_sorted_ix] = make_identifier(;
+            is_tethered=false, 
+            agent_type="BamA", 
+            is_inserting=true, 
+            is_nascent=false,
+            nascent_ix=nascent_ix
+        )
+
+        #inserting-substrate mappings
+        system_flat.nascent_to_substrate_ixs[nascent_ix] = sorted_ix
+        system_flat.nascent_to_inserting_ixs[nascent_ix] = inserting_agent_sorted_ix
+        system_flat.substrate_inserting_ideal_dists[nascent_ix] = nascent_OMP.ideal_dist_from_inserting_agent
+
+        nascent_ix += 1
+    end
+    for nascent_LPS in agents.nascent.nascent_LPS
+        #update nascent identifier
+        sorted_ix = system_flat.agent_ix_to_sorted_ix[nascent_LPS.index]
+        system_flat.identifiers[sorted_ix] = make_identifier(;
+            is_tethered=false, 
+            agent_type="LPS", 
+            is_inserting=false, 
+            is_nascent=true,
+            nascent_ix=nascent_ix
+        )
+
+        #update inserting agent identifier too
+        inserting_agent_index = nascent_LPS.inserting_agent_index
+        inserting_agent_sorted_ix = system_flat.agent_ix_to_sorted_ix[inserting_agent_index]
+        system_flat.identifiers[inserting_agent_sorted_ix] = make_identifier(;
+            is_tethered=false, 
+            agent_type="LptD", 
+            is_inserting=true, 
+            is_nascent=false,
+            nascent_ix=nascent_ix
+        )
+
+        #inserting-substrate mappings
+        system_flat.nascent_to_substrate_ixs[nascent_ix] = sorted_ix
+        system_flat.nascent_to_inserting_ixs[nascent_ix] = inserting_agent_sorted_ix
+        system_flat.substrate_inserting_ideal_dists[nascent_ix] = nascent_LPS.ideal_dist_from_inserting_agent
+
+        nascent_ix += 1
+    end
+end
+
 
 
 """
@@ -259,6 +377,7 @@ function generate_nascent_OMP_obj!(agents::AllAgents, grid_size::GridSize, BamA:
 
     #update grid size
     grid_size.num_agents += 1
+    grid_size.num_agents_changed = true
 end
 
 
@@ -270,7 +389,7 @@ Updates the Lpt subsystem of the system. Specifically, iterates over all (assemb
 for changes in insertion state. If necessary, generates new nascent LPS or changes fully-inserted nascent LPS
 agents to full LPS agents. 
 """
-function update_Lpt_subsystem!(agents::AllAgents, grid_size::GridSize, params::AllParams, t::Float64)
+function update_Lpt_subsystem!(agents::AllAgents, grid_size::GridSize, system_flat::AllAgentsFlat, params::AllParams, t::Float64)
 
     #loop LptDs
     for LptD in agents.OMP.LptD
@@ -293,8 +412,9 @@ function update_Lpt_subsystem!(agents::AllAgents, grid_size::GridSize, params::A
             elseif LptD.insertion_state=="embedding"
 
                 #find substrate LPS (TODO: improve)
-                for nascent_ix = 1:length(agents.nascent.nascent_LPS)
-                    nascent_LPS = agents.nascent.nascent_LPS[nascent_ix]
+                nascent_LPS_ixs_to_delete = Int[]
+                for nascent_LPS_ix = 1:length(agents.nascent.nascent_LPS)
+                    nascent_LPS = agents.nascent.nascent_LPS[nascent_LPS_ix]
                     if nascent_LPS.inserting_agent_index == LptD.index
 
                         #check if this LPS is now fully inserted
@@ -303,23 +423,41 @@ function update_Lpt_subsystem!(agents::AllAgents, grid_size::GridSize, params::A
                         if time_since_insertion > params.LPS.insertion_time + time_err
 
                             #make a new LPS agent
-                            arrival_time_init = 0.0
                             new_LPS = LPSAgent(
                                 nascent_LPS.index,
                                 nascent_LPS.position,
-                                arrival_time_init
+                                nascent_LPS.arrival_time
                             )
                             push!(agents.LPS, new_LPS)
 
-                            #delete the nascent LPS
-                            deleteat!(agents.nascent.nascent_LPS, nascent_ix)
-
                             #update the LptD as well
                             LptD.insertion_state = "free"
+
+                            #and its identifier
+                            inserting_sorted_ix = system_flat.agent_ix_to_sorted_ix[LptD.index]
+                            system_flat.identifiers[inserting_sorted_ix] = make_identifier(;
+                                is_tethered=true, 
+                                agent_type="LptD", 
+                                is_inserting=false, 
+                                is_nascent=false,
+                                nascent_ix=0
+                            )
+
+                            #mark this nascent agent for deletion
+                            push!(nascent_LPS_ixs_to_delete, nascent_LPS_ix)
                         end
 
                         break
                     end
+                end
+
+                #delete the nascent agents which have been promoted
+                deleteat!(agents.nascent.nascent_LPS, nascent_LPS_ixs_to_delete)
+
+                #now update identifiers of all nascent agents and their inserting agents (since their nascent_ix has changed)
+                if length(nascent_LPS_ixs_to_delete)>0
+                    update_flat_data_nascent_agents!(agents, system_flat)
+                    grid_size.nascent_promoted = true
                 end
 
             end
@@ -365,16 +503,21 @@ function generate_nascent_LPS_obj!(agents::AllAgents, grid_size::GridSize, LptD:
 
     #update grid
     grid_size.num_agents += 1
+    grid_size.num_agents_changed = true
 end
 
 
 """
-    function update_tethering_and_assembly!(agents::AllAgents, params::AllParams)
+    function update_tethering_and_assembly!(agents::AllAgents, system_flat_cpu::AllAgentsFlat, params::AllParams)
 
 Iterates through all agents which can be tethered or assembled but haven't been already and checks
 for new tether formation or assembly.
 """
-function update_tethering_and_assembly!(agents::AllAgents, params::AllParams)
+function update_tethering_and_assembly!(agents::AllAgents, system_flat_cpu::AllAgentsFlat, params::AllParams)
+
+
+    #output initialisation
+    newly_tethered_agent_ixs = Int[]
 
     #transition probabilities
     pr_OmpA_tether = 1 - exp(-params.OmpA.tether_rate * params.system.dt)
@@ -387,6 +530,18 @@ function update_tethering_and_assembly!(agents::AllAgents, params::AllParams)
             if rand()<pr_OmpA_tether
                 OmpA.is_tethered = true
                 OmpA.tether_point = OmpA.position
+                #remember this (sorted) ix
+                sorted_ix = system_flat_cpu.agent_ix_to_sorted_ix[OmpA.index]
+                push!(newly_tethered_agent_ixs, sorted_ix)
+                #recompute identifier
+                sorted_ix = system_flat_cpu.agent_ix_to_sorted_ix[OmpA.index]
+                system_flat_cpu.identifiers[sorted_ix] = make_identifier(;
+                    is_tethered=true, 
+                    agent_type="OmpA", 
+                    is_inserting=false, 
+                    is_nascent=false,
+                    nascent_ix=0
+                )
             end
         end
     end
@@ -407,7 +562,21 @@ function update_tethering_and_assembly!(agents::AllAgents, params::AllParams)
                 LptD.is_part_of_assembled_complex=true
                 LptD.is_tethered = true
                 LptD.tether_point = LptD.position
+                #remember this (sorted) ix
+                sorted_ix = system_flat_cpu.agent_ix_to_sorted_ix[LptD.index]
+                push!(newly_tethered_agent_ixs, sorted_ix)
+                #recompute identifier
+                sorted_ix = system_flat_cpu.agent_ix_to_sorted_ix[LptD.index]
+                system_flat_cpu.identifiers[sorted_ix] = make_identifier(;
+                    is_tethered=true, 
+                    agent_type="LptD", 
+                    is_inserting=false, 
+                    is_nascent=false,
+                    nascent_ix=0
+                )
             end
         end
     end
+
+    return newly_tethered_agent_ixs
 end

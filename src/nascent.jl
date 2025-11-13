@@ -5,7 +5,7 @@
 
 Top level function for updating spring length and effective radius of all nascent objects.
 """
-function update_nascent_agents!(agents::AllAgents, params::AllParams, t::Float64)
+function update_nascent_agents!(agents::AllAgents, system_flat::AllAgentsFlat, params::AllParams, t::Float64)
 
     #adjust spring distance and size of all nascent objects
     for nascent_OMP in agents.nascent.nascent_OMP
@@ -14,6 +14,20 @@ function update_nascent_agents!(agents::AllAgents, params::AllParams, t::Float64
     for nascent_LPS in agents.nascent.nascent_LPS
         update_nascent_LPS!(nascent_LPS, params, t)
     end
+
+    #update flat data structure
+    nascent_ix = 1
+    for nascent_OMP in agents.nascent.nascent_OMP
+        sorted_ix = system_flat.agent_ix_to_sorted_ix[nascent_OMP.index]
+        system_flat.effective_radii[sorted_ix] = nascent_OMP.effective_radius
+        system_flat.substrate_inserting_ideal_dists[nascent_ix] = nascent_OMP.ideal_dist_from_inserting_agent
+        nascent_ix += 1
+    end
+    for nascent_LPS in agents.nascent.nascent_LPS
+        system_flat.substrate_inserting_ideal_dists[nascent_ix] = nascent_LPS.ideal_dist_from_inserting_agent
+        nascent_ix += 1
+    end
+
 end
 
 

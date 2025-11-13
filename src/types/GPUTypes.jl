@@ -32,7 +32,6 @@ mutable struct GridSizeMetal
     num_cells::SVector{2, Int}
     tot_num_cells::Int
     num_agents::Int
-    has_changed::Bool
 end
 
 
@@ -45,6 +44,7 @@ mutable struct AllDataMetal
     effective_radii::MtlVector{Float32, Metal.PrivateStorage}
     identifiers::MtlVector{Int, Metal.PrivateStorage}
     tether_points::MtlVector{Float32, Metal.PrivateStorage}
+    agg_dist_since_grid_sync::MtlVector{Float32, Metal.PrivateStorage}
     nascent_to_inserting_ixs::MtlVector{Int, Metal.PrivateStorage}
     nascent_to_substrate_ixs::MtlVector{Int, Metal.PrivateStorage}
     substrate_inserting_ideal_dists::MtlVector{Float32, Metal.PrivateStorage}
@@ -55,5 +55,8 @@ mutable struct AllDataMetal
     agent_cell_z_ixs::MtlVector{Int, Metal.PrivateStorage}
     num_agents_in_cell::MtlVector{Int, Metal.PrivateStorage}
     start_agents_in_cell::MtlVector{Int, Metal.PrivateStorage}
+
+    #additional field for efficient updating when tethers form
+    newly_tethered_agent_ixs::MtlVector{Int, Metal.PrivateStorage}
 end
 

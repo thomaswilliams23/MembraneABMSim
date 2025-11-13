@@ -1,0 +1,73 @@
+{
+    "OmpA": {
+        "radius": 0.0518,
+        "insertion_prob": 0.7,
+        "tether_rate": 0,
+        "tether_radius": 0.025
+    },
+    "OmpCF" : {
+        "radius": 0.1725,
+        "insertion_prob": 0.3
+    },
+    "LptD": {
+        "radius": 0.259,
+        "insertion_prob": 0,
+        "complex_assembly_rate" : 0,
+        "tether_radius": 0.06
+    },
+    "BamA": {
+        "radius": 0.1725,
+        "insertion_prob": 0,
+        "complex_assembly_rate": 0.3
+    },
+    "LPS": {
+        "radius": 0.0345,
+        "arrival_rate": 0,
+        "insertion_time": 1.0 
+    },
+    "init": {
+        "dim_x": 0.7,
+        "dim_y": 0.7,
+        "num_OmpA": 0,
+        "num_OmpCF": 2,
+        "num_LptD": 0,
+        "num_BamA": 0,
+        "num_LPS": 0,
+        "num_PP": 0,
+        "method": "random",
+        "equilibration_time": 0,
+        "complexes_assembled": true
+    },
+    "insertion": {
+        "type": "lipid-dependent",
+        "attempt_dt": 0.1,
+        "mu_rep" : 0.5,
+        "mu_attr" : 0.5,
+        "k_C": 0.5,
+        "PP_arrival_rate": 0,
+        "PP_bind_rate": 0,
+        "OMP_assembly_rate": 0
+    },
+    "force": {
+        "temperature": 0,
+        "mu_rep": 0.05,
+        "mu_attr_OMP_OMP": 0.025,
+        "mu_attr_OMP_LPS": 0.025,
+        "mu_attr_LPS_LPS": 0.5,
+        "rho": 0.9,
+        "max_repulsion": -0.08,
+        "k_C": 0.5,
+        "eta": 1,
+        "sensing_radius": 0.1
+    },
+    "system": {
+        "density": 0.9,
+        "dt": 0.001,
+        "num_sub_timesteps": 10,
+        "t_max": 20,
+        "vis_dt": 0.1,
+        "output_dir": "BUGFIX_tiny",
+        "seed": 5,
+        "device": "cpu"
+    }
+}

@@ -238,7 +238,7 @@ function make_membrane_movie(out_path::String)
     #check that the out_path exists and contains data
     raw_data_dir = joinpath("out", out_path, "raw_data")
     if !isdir(raw_data_dir)
-        error("Can't find output directory $data_dir")
+        error("Can't find output directory $raw_data_dir")
     end
     if isempty(readdir(raw_data_dir))
         error("Data directory exists, but is empty.")
@@ -274,7 +274,7 @@ function make_membrane_movie(out_path::String)
     movie_path = joinpath("out", out_path, "sim.mp4")
 
     #loop over each output data file and generate a snapshot for the movie
-    record(fig, movie_path, 1:num_time_steps) do time_ix
+    record(fig, movie_path, 0:num_time_steps) do time_ix
 
         print("Rendering frame $time_ix of $num_time_steps\r")
         

@@ -8,7 +8,9 @@ mutable struct GridSize
     num_cells::SVector{2, Int}
     tot_num_cells::Int
     num_agents::Int
-    has_changed::Bool
+    grid_size_changed::Bool
+    num_agents_changed::Bool
+    nascent_promoted::Bool
 end
 
 # this stuff is larger and changes less frequently, so can optionally live on GPU

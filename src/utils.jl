@@ -135,6 +135,13 @@ simple function to generate an compact identifier for an agent, encoding its pro
         identifier += 1000
     end
 
+
+    #BUGFIX
+    if abs(identifier)>1e6
+        error("Generated junk identifier: $identifier")
+    end
+
+
     return identifier
 end
 
@@ -164,6 +171,13 @@ recovers agent properties from compact identifier
     end
     nascent_ix = floor(Int, identifier / 10)
     identifier -= nascent_ix * 10
+
+
+    #BUGFIX
+    if identifier ∉ keys(num_to_agent_type)
+        return false, "Unknown", true, true, -1
+    end
+
 
     agent_type = num_to_agent_type[identifier]
     return is_tethered, agent_type, is_nascent, is_inserting, nascent_ix

@@ -56,7 +56,9 @@ function initialise_grid(params::AllParams)
         params.init.num_LPS
     )
 
-    has_changed_init = true
+    grid_size_changed_init = true
+    num_agents_changed_init = true
+    nascent_promoted_init = false
 
     #grid_size object
     grid_size = GridSize(
@@ -64,7 +66,9 @@ function initialise_grid(params::AllParams)
         num_cells_init,
         prod(num_cells_init),
         num_agents_init,
-        has_changed_init
+        grid_size_changed_init,
+        num_agents_changed_init,
+        nascent_promoted_init
     )
 
 
@@ -380,6 +384,60 @@ function build_nascent_added_area_lookup(params::AllParams)
 end
 
 
+"""
+precompute increments for effective radius and distance increments for nascent agents
+"""
+function compute_nascent_incs(params::AllParams)
+    #initialise
+    effective_rad_incs = Vector{Float64}(undef, 7)
+    ideal_dist_incs = Vector{Float64}(undef, 7)
+
+    #maps
+    agent_type_to_num = Dict(
+        "OmpA" => 1,
+        "OmpCF" => 3,
+        "BamA" => 5,
+        "LptD" => 7,
+        "LPS" => 2
+    )
+    agent_type_to_rad = Dict(
+        "OmpA" => params.OmpA.radius,
+        "OmpCF" => params.OmpCF.radius,
+        "BamA" => params.BamA.radius,
+        "LptD" => params.LptD.radius,
+        "LPS" => params.LPS.radius
+    )
+
+    #helper
+    function _compute_insertion_incs_this_agent_type(agent_type::String)
+        final_rad = agent_type_to_rad[agent_type]
+        final_dist = params.BamA.radius + final_rad
+        if final_rad>params.BamA.radius
+            init_rad = params.BamA.radius
+            init_dist = 0.0
+        else
+            init_rad = final_rad
+            init_dist = params.BamA.radius - final_rad
+        end
+        init_rad = min(params.BamA.radius, final_rad)
+        insertion_time = final_rad/params.insertion.OMP_assembly_rate
+        effective_rad_inc = (params.system.dt/insertion_time)*(final_rad - init_rad)
+        ideal_dist_inc = (params.system.dt/insertion_time)*(final_dist - init_dist)
+        return (effective_rad_inc, ideal_dist_inc)
+    end
+
+    #compute increments for each agent type
+    for (i, agent_type) in enumerate(keys(agent_type_to_num))
+        (effective_rad_incs[i], ideal_dist_incs[i]) = _compute_insertion_incs_this_agent_type(agent_type)
+    end
+
+    return (
+        SVector{7, Float64}(effective_rad_incs), 
+        SVector{7, Float64}(ideal_dist_incs)
+    )
+end
+
+
 
 """
     initialise_system_random(params::AllParams)
@@ -401,7 +459,7 @@ function initialise_system_random(params::AllParams)
 
     #run equilibration
     steps_since_grid_sync = 0
-    MAX_STEPS_BETWEEN_GRID_SYNC = 10 #temporary
+    MAX_STEPS_BETWEEN_GRID_SYNC = 100 #temporary
     t = 0.0
     time_err = 0.1 * params.system.dt
     while t < params.init.equilibration_time - time_err
@@ -430,7 +488,7 @@ function initialise_system_random(params::AllParams)
 
     #if specified, set all agents as assembled/tethered
     if params.init.complexes_assembled
-        assemble_all_agents!(agents)
+        assemble_all_agents!(agents, system_flat_cpu)
     end
 
     return (agents, grid_size, grid, system_flat_cpu)
@@ -444,10 +502,15 @@ end
 If this option is specified in the parameters structure, make all relevant agents tethered or 
 assembled.
 """
-function assemble_all_agents!(agents::AllAgents)
+function assemble_all_agents!(agents::AllAgents, system_flat::AllAgentsFlat)
     for OmpA in agents.OMP.OmpA
         OmpA.is_tethered = true
         OmpA.tether_point = OmpA.position
+        #change the flat data structure too
+        sorted_ix = system_flat.agent_ix_to_sorted_ix[OmpA.index]
+        system_flat.tether_points[2*(sorted_ix-1)+1] = OmpA.tether_point[1]
+        system_flat.tether_points[2*(sorted_ix-1)+2] = OmpA.tether_point[2]
+        system_flat.identifiers[sorted_ix] = -abs(system_flat.identifiers[sorted_ix])
     end
     for BamA in agents.OMP.BamA
         BamA.is_part_of_assembled_complex = true
@@ -456,5 +519,10 @@ function assemble_all_agents!(agents::AllAgents)
         LptD.is_part_of_assembled_complex = true
         LptD.is_tethered = true
         LptD.tether_point = LptD.position
+        #change the flat data structure too
+        sorted_ix = system_flat.agent_ix_to_sorted_ix[LptD.index]
+        system_flat.tether_points[2*(sorted_ix-1)+1] = LptD.tether_point[1]
+        system_flat.tether_points[2*(sorted_ix-1)+2] = LptD.tether_point[2]
+        system_flat.identifiers[sorted_ix] = -abs(system_flat.identifiers[sorted_ix])
     end
 end

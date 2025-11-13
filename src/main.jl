@@ -23,6 +23,9 @@ function run_sim(config_pathname::String)
     if params.system.device == "metal"
         println("Running on Metal GPU")
         device = "metal"
+    elseif params.system.device == "cpu"
+        println("Running on CPU")
+        device = "cpu"
     else
         if !isnothing(params.system.device)
             error("Device type $(params.system.device) not recognised")
@@ -31,13 +34,20 @@ function run_sim(config_pathname::String)
 
     #build nascent added area lookup for speed
     nascent_added_area_lookup = build_nascent_added_area_lookup(params)
+    effective_rad_incs, ideal_dist_incs = compute_nascent_incs(params)
 
     #intialise the system
     t=0.0
     if device=="cpu"
-        agents, grid_size, grid, system_flat_cpu = initialise_system_cpu(params)
+        (
+            agents, 
+            grid_size, 
+            grid, 
+            system_flat_cpu
+        ) = initialise_system_cpu(params)
     elseif device=="metal"
         (
+            non_force_position_kernel,
             force_kernel, 
             agents, 
             grid_size, 
@@ -47,6 +57,8 @@ function run_sim(config_pathname::String)
             grid_size_metal, 
             params_metal
         ) = initialise_system_metal(params)
+        effective_rad_incs_metal = Float32.(effective_rad_incs)
+        ideal_dist_incs_metal = Float32.(ideal_dist_incs)
     end
 
 
@@ -57,61 +69,107 @@ function run_sim(config_pathname::String)
 
     #main loop
     steps_since_grid_sync = 0
-    MAX_STEPS_BETWEEN_GRID_SYNC = 10 #temporary
+    MAX_STEPS_BETWEEN_GRID_SYNC = 5 #temporary
     time_err = 0.1*params.system.dt
     while t<params.system.t_max - time_err
-
-        #TMP: check if agents have been added
-        curr_num_agents = grid_size.num_agents
-        num_agents_changed = false
-        ####
 
         #update BAM subsystem
         update_BAM_subsystem!(agents, grid_size, grid, system_flat_cpu, params, t)
 
         #update Lpt subsystem
-        update_Lpt_subsystem!(agents, grid_size, params, t)
+        update_Lpt_subsystem!(agents, grid_size, system_flat_cpu, params, t)
 
-        #TMP: check if agents have been added
-        if curr_num_agents != grid_size.num_agents
-            num_agents_changed = true
-        end
-        ####
+        #if we added new agents, need to update grid and flat data structure
+        if grid_size.num_agents_changed
 
+            #if using metal, copy data back to CPU to rebuild grid
+            if device=="metal"
+                update_tether_data_cpu!(agents, system_flat_cpu, all_data_metal, grid_size_metal)
+            end
 
-        #check for any new tethering or assembly
-        update_tethering_and_assembly!(agents, params)
-
-        #update any nascent agents
-        update_nascent_agents!(agents, params, t)
-        
-        #rescale the domain and every agent's position
-        rescale_domain!(agents, grid_size, params, nascent_added_area_lookup, t)
-
-        #compute diffusion of every agent
-        compute_diffusion!(agents, system_flat_cpu, grid_size, params)
-
-        #update the grid and flat system data
-        if steps_since_grid_sync >= MAX_STEPS_BETWEEN_GRID_SYNC || num_agents_changed
+            #rebuild grid and flat data structures
             rebuild_grid!(grid_size, grid, agents, params.force.sensing_radius)
             compile_flat_system_data_cpu!(system_flat_cpu, agents, grid_size, grid, params)
             put_grid_in_sorted_order!(grid_size, grid, system_flat_cpu)
+
+            #if using metal, copy data to GPU
+            if device=="metal"
+                copy_data_to_metal!(all_data_metal, grid_size_metal, system_flat_cpu, grid_size, grid)
+            end
+
+            steps_since_grid_sync = 0
+        end
+
+        #if any nascent agents have been promoted, need to update flat data structure on gpu
+        if device=="metal" && grid_size.nascent_promoted
+            update_nascent_promotion_metal!(all_data_metal, system_flat_cpu, grid_size)
+        end
+
+        #check for any new tethering or assembly
+        newly_tethered_agent_ixs = update_tethering_and_assembly!(agents, system_flat_cpu, params)
+
+        #if using metal, update newly tethered agent ixs on GPU
+        if device=="metal" && length(newly_tethered_agent_ixs)>0
+            update_newly_tethered_agent_ixs_metal!(all_data_metal, newly_tethered_agent_ixs)
+        end
+
+        #update any nascent agents
+        update_nascent_agents!(agents, system_flat_cpu, params, t)
+
+
+        #rescale the domain and all agent positions
+        if device=="cpu"
+            rescale_domain!(agents, system_flat_cpu, grid_size, params, nascent_added_area_lookup, t)
+        elseif device=="metal"
+            compute_non_force_position_changes!(
+                non_force_position_kernel, 
+                agents, 
+                all_data_metal, 
+                grid_size, 
+                grid_size_metal, 
+                effective_rad_incs_metal, 
+                ideal_dist_incs_metal, 
+                nascent_added_area_lookup, 
+                newly_tethered_agent_ixs, 
+                params, 
+                t
+            )
+        end
+
+        #if it has been too long since last grid sync, rebuild grid and flat data structures
+        if steps_since_grid_sync >= MAX_STEPS_BETWEEN_GRID_SYNC
+
+            #if using metal, copy data back to CPU to rebuild grid
+            if device=="metal"
+                update_tether_data_cpu!(agents, system_flat_cpu, all_data_metal, grid_size_metal)
+            end
+
+            #rebuild grid and flat data structures
+            rebuild_grid!(grid_size, grid, agents, params.force.sensing_radius)
+            compile_flat_system_data_cpu!(system_flat_cpu, agents, grid_size, grid, params)
+            put_grid_in_sorted_order!(grid_size, grid, system_flat_cpu)
+
+            #if using metal, copy data to GPU
+            if device=="metal"
+                copy_data_to_metal!(all_data_metal, grid_size_metal, system_flat_cpu, grid_size, grid)
+            end
+
             steps_since_grid_sync = 0
         else
             steps_since_grid_sync += 1
         end
 
-        #resolve inter-agent forces
+        #resolve inter-agent forces and diffusion
         if device=="cpu"
+            compute_diffusion!(agents, system_flat_cpu, grid_size, params)
             resolve_forces_cpu!(agents, grid_size, grid, system_flat_cpu, params)
         elseif device=="metal"
-            copy_data_to_metal!(all_data_metal, grid_size_metal, system_flat_cpu, grid_size, grid)
             resolve_forces_metal!(force_kernel, agents, system_flat_cpu, all_data_metal, grid_size_metal, params_metal)
         end
 
+
         #step time
         t += params.system.dt
-
 
         #optionally write out data
         if abs(t/params.system.vis_dt - round(t/params.system.vis_dt))<time_err
