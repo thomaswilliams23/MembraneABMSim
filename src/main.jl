@@ -32,7 +32,7 @@ function run_sim(config_pathname::String)
         end
     end
 
-    #build nascent added area lookup for speed
+    #build nascent lookups for speed
     nascent_added_area_lookup = build_nascent_added_area_lookup(params)
     effective_rad_incs, ideal_dist_incs = compute_nascent_incs(params)
 
@@ -114,7 +114,7 @@ function run_sim(config_pathname::String)
         end
 
         #update any nascent agents
-        update_nascent_agents!(agents, system_flat_cpu, params, t)
+        update_nascent_agents!(agents, system_flat_cpu, effective_rad_incs, ideal_dist_incs)
 
 
         #rescale the domain and all agent positions

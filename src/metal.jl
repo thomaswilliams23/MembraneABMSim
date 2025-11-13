@@ -922,17 +922,17 @@ end
 
 """
     function _non_force_position_kernel!(
-    positions::MtlDeviceVector{Float32},
-    effective_radii::MtlDeviceVector{Float32},
-    identifiers::MtlDeviceVector{Int},
-    tether_points::MtlDeviceVector{Float32},
-    substrate_inserting_ideal_dists::MtlDeviceVector{Float32},
-    newly_tethered_agent_ixs::MtlDeviceVector{Int},
-    dims::SVector{2, Float32},
-    effective_rad_incs::SVector{7, Float32},
-    ideal_dist_incs::SVector{7, Float32},
-    scale_factor::Float32,
-    num_newly_tethered::Int
+        positions::MtlDeviceVector{Float32},
+        effective_radii::MtlDeviceVector{Float32},
+        identifiers::MtlDeviceVector{Int},
+        tether_points::MtlDeviceVector{Float32},
+        substrate_inserting_ideal_dists::MtlDeviceVector{Float32},
+        newly_tethered_agent_ixs::MtlDeviceVector{Int},
+        dims::SVector{2, Float32},
+        effective_rad_incs::SVector{7, Float32},
+        ideal_dist_incs::SVector{7, Float32},
+        scale_factor::Float32,
+        num_newly_tethered::Int
     )
 
 Metal GPU kernel for computing non-force position changes.
