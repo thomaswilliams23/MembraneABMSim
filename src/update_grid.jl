@@ -32,7 +32,7 @@ function rebuild_grid!(grid_size::GridSize, grid::SimGrid, agents::AllAgents, se
         grid.z_ix_to_coords = z_ix_to_coords
 
         #check if grid vectors need resizing
-        curr_grid_vec_size = length(grid.agent_cell_z_ixs)
+        curr_grid_vec_size = length(grid.num_agents_in_cell)
         if grid_size.tot_num_cells > curr_grid_vec_size
             size_increase_ratio = 1.25
             new_vec_size = ceil(Int, size_increase_ratio*grid_size.tot_num_cells)
