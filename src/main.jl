@@ -69,7 +69,7 @@ function run_sim(config_pathname::String)
 
     #main loop
     steps_since_grid_sync = 0
-    MAX_STEPS_BETWEEN_GRID_SYNC = 5 #temporary
+    MAX_STEPS_BETWEEN_GRID_SYNC = 100 #temporary
     time_err = 0.1*params.system.dt
     while t<params.system.t_max - time_err
 
