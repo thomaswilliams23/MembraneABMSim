@@ -1,8 +1,9 @@
 
-#define cell and grid types for spatial partitioning
+"""
+    GridSize
 
-
-# this stuff is small and changes every timestep, so lives on CPU
+Mutable struct holding grid dimensions, cell counts, agent counts, and flags for grid state changes. Updates every timestep.
+"""
 mutable struct GridSize
     dims::SVector{2, Float64}
     num_cells::SVector{2, Int}
@@ -13,7 +14,12 @@ mutable struct GridSize
     nascent_promoted::Bool
 end
 
-# this stuff is larger and changes less frequently, so can optionally live on GPU
+
+"""
+    SimGrid
+
+Mutable struct containing spatial partitioning data for agents and cells, used for efficient neighbour search and grid management.
+"""
 mutable struct SimGrid
     coords_to_z_ix::Vector{Int}
     z_ix_to_coords::Vector{Int}

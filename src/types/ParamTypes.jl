@@ -1,6 +1,8 @@
+"""
+    OmpAParams
 
-
-#simulation-related parameters
+Parameters for OmpA agents, including radius, insertion probability, tether rate, and tether radius.
+"""
 struct OmpAParams
     radius::Float64
     insertion_prob::Float64
@@ -8,11 +10,21 @@ struct OmpAParams
     tether_radius::Float64
 end
 
+"""
+    OmpCFParams
+
+Parameters for OmpCF agents, including radius and insertion probability.
+"""
 struct OmpCFParams
     radius::Float64
     insertion_prob::Float64
 end
 
+"""
+    LptDParams
+
+Parameters for LptD agents, including radius, insertion probability, complex assembly rate, and tether radius.
+"""
 struct LptDParams
     radius::Float64
     insertion_prob::Float64
@@ -20,18 +32,33 @@ struct LptDParams
     tether_radius::Float64
 end
 
+"""
+    BamAParams
+
+Parameters for BamA agents, including radius, insertion probability, and complex assembly rate.
+"""
 struct BamAParams
     radius::Float64
     insertion_prob::Float64
     complex_assembly_rate::Float64
 end
 
+"""
+    LPSParams
+
+Parameters for LPS agents, including radius, arrival rate, and insertion time.
+"""
 struct LPSParams
     radius::Float64
     arrival_rate::Float64
     insertion_time::Float64
 end
 
+"""
+    InitConditions
+
+Initial conditions for the simulation, including domain size, agent counts, method, and equilibration settings.
+"""
 struct InitConditions
     dim_x::Float64
     dim_y::Float64
@@ -46,6 +73,11 @@ struct InitConditions
     complexes_assembled::Union{Nothing, Bool}
 end
 
+"""
+    InsertionParams
+
+Parameters controlling agent insertion dynamics, including rates and force constants.
+"""
 struct InsertionParams
     type::String
     attempt_dt::Float64
@@ -57,6 +89,11 @@ struct InsertionParams
     OMP_assembly_rate::Float64
 end
 
+"""
+    ForceParams
+
+Parameters for force calculations, including temperature, attraction/repulsion coefficients, and sensing radius.
+"""
 struct ForceParams
     temperature::Float64
     mu_rep::Float64
@@ -70,7 +107,11 @@ struct ForceParams
     sensing_radius::Float64
 end
 
+"""
+    SystemParams
 
+General simulation parameters, including density, timestep, output settings, and device configuration.
+"""
 struct SystemParams
     density::Float64
     dt::Float64
@@ -82,8 +123,11 @@ struct SystemParams
     device::Union{Nothing, String}
 end
 
+"""
+    AllParams
 
-#container
+Container struct holding all simulation parameters for agents, initial conditions, insertion, force, and system.
+"""
 struct AllParams
     OmpA::OmpAParams
     OmpCF::OmpCFParams
@@ -98,13 +142,22 @@ end
 
 
 
-#sweep-related structures
+"""
+    SweepParamValues
+
+Holds values for a parameter sweep, including a short name and a vector of values.
+"""
 struct SweepParamValues
     short_name::Union{Nothing, String}
     values::Vector{Any}
 end
 
 
+"""
+    SweepParams
+
+Container for parameter sweep configuration, including sweep parameters, repetitions, and output directory.
+"""
 struct SweepParams
     sweep_params::Dict{String, SweepParamValues}
     num_reps::Int

@@ -1,7 +1,7 @@
 
 
 """
-    resolve_forces_cpu!(grid::SimGrid, agents::AllAgents, params::AllParams)
+    resolve_forces_cpu!(agents::AllAgents, grid_size::GridSize, grid::SimGrid, system_flat::AllAgentsFlat, params::AllParams)
 
 Top level function to resolve forces on all agents in the system. Runs with multi-threading by
 default, on the GPU as an option.
@@ -41,7 +41,7 @@ end
 
 
 """
-    compile_flat_system_data_cpu!(system_flat::AllAgentsFlat, agents::AllAgents, grid::SimGrid, params::AllParams)
+    compile_flat_system_data_cpu!(system_flat::AllAgentsFlat, agents::AllAgents, grid_size::GridSize, grid::SimGrid, params::AllParams)
 
 Rebuilds the system_flat (`AllAgentsFlat`) structure used for force calculations. Data is read in
 by traversing grid cells in Morton z order for efficiency.
@@ -262,11 +262,12 @@ end
 
 
 """
-    compute_next_position(sorted_ix::Int, system_flat::AllAgentsFlat, grid::SimGrid, params::AllParams)
+    compute_next_position(sorted_ix::Int, system_flat::AllAgentsFlat, grid_size::GridSize, grid::SimGrid, params::AllParams, max_agg_dist::Float64)
 
 Computes the next position of a specified agent after tallying attraction-repulsion forces and 
 inserting-substrate forces (if this agent is not inserting something or is being inserted - denoted
-by `substrate_inserting_ix` being negative). Returns the next position as a 2-element vector.
+by `substrate_inserting_ix` being negative). Returns the next position as a 2-element vector. Also 
+updates the agent's aggregated distance since last grid sync.
 """
 function compute_next_position(sorted_ix::Int, system_flat::AllAgentsFlat, grid_size::GridSize, grid::SimGrid, params::AllParams, max_agg_dist::Float64)
 
@@ -361,7 +362,7 @@ end
 
 
 """
-    tally_attr_rep_forces(sorted_ix::Int, substrate_inserting_ix::Int, grid::SimGrid, system_flat::AllAgentsFlat, params::AllParams)
+    tally_attr_rep_forces(sorted_ix::Int, sorted_substrate_inserting_ix::Int, grid_size::GridSize, grid::SimGrid, system_flat::AllAgentsFlat, params::AllParams, max_agg_dist::Float64)
 
 Aggregates all attraction-repulsion forces acting on a specific agent. Returns a 2-element vector containing 
 the resultant force on the agent.
@@ -506,6 +507,8 @@ end
     compute_inserting_substrate_force(agent_pos::SVector{2, Float64}, neighbour_pos::SVector{2, Float64},
                                            dims::SVector{2, Float64}, ideal_dist::Float64, 
                                            mu_attr::Float64, mu_rep::Float64, k_C::Float64) :: SVector{2, Float64}
+
+Computes the force between an inserting agent and its substrate agent as a 2-element vector.
 """
 function compute_inserting_substrate_force(agent_pos::SVector{2, Float64}, neighbour_pos::SVector{2, Float64},
                                            dims::SVector{2, Float64}, ideal_dist::Float64, 
@@ -543,7 +546,7 @@ end
 
 
 """
-    compute_diffusion!(agents::AllAgents, grid::SimGrid, params::AllParams)
+    compute_diffusion!(agents::AllAgents, system_flat::AllAgentsFlat, grid_size::GridSize, params::AllParams)
 
 Computes the position of all agents following one time step of diffusion. If a proposal move
 takes an agent beyond the tether radius of its tether point, the move is rejected.

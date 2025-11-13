@@ -10,6 +10,7 @@ type specified in the parameter structure, calls a helper function to assemble t
 Output:
 (
     agents::AllAgents,
+    grid_size::GridSize,
     grid::SimGrid,
     system_flat::AllAgentsFlat
 )
@@ -29,7 +30,7 @@ function initialise_system_cpu(params::AllParams)
         error("Initialisation type $(params.initialisation.init_type) not recognised.")
     end
 
-    # return the initialised model (placeholder for now)
+    # return the initialised model
     return (agents, grid_size, grid, system_flat_cpu)
 end
 
@@ -97,7 +98,7 @@ end
 
 
 """
-    initialise_flat_cpu(params::AllParams) -> AllAgentsFlat
+    initialise_flat_cpu(params::AllParams)
 
 Initialises a blank flat data structure used for force calculation.
 """
@@ -146,9 +147,11 @@ end
 
 
 """
-initialise agents
+    initialise_agents_random(grid_size::GridSize, params::AllParams)
+
+Initialises the AllAgents structure with agents randomly placed within the domain.
 """
-function initialise_agents(grid_size::GridSize, params::AllParams)
+function initialise_agents_random(grid_size::GridSize, params::AllParams)
 
     #initialisation defaults
     init_agent_arrival_time = -Inf     #init objects assumed to have arrived at -Inf
@@ -385,7 +388,10 @@ end
 
 
 """
-precompute increments for effective radius and distance increments for nascent agents
+    compute_nascent_incs(params::AllParams)
+
+Precompute increments for effective radius and distance increments for nascent agents 
+as they are inserted.
 """
 function compute_nascent_incs(params::AllParams)
     #initialise
@@ -443,14 +449,14 @@ end
     initialise_system_random(params::AllParams)
 
 Initialises a simulation with agents randomly placed within the domain. Runs equilibration 
-to resolve positions.
+to resolve forces.
 """
 function initialise_system_random(params::AllParams)
 
     #initialise simulation objects
     grid_size, grid = initialise_grid(params)
     system_flat_cpu = initialise_flat_cpu(params)
-    agents = initialise_agents(grid_size, params)
+    agents = initialise_agents_random(grid_size, params)
 
     #populate data structures
     rebuild_grid!(grid_size, grid, agents, params.force.sensing_radius)
@@ -497,7 +503,7 @@ end
 
 
 """
-    function assemble_all_agents!(agents::AllAgents)
+    assemble_all_agents!(agents::AllAgents)
 
 If this option is specified in the parameters structure, make all relevant agents tethered or 
 assembled.

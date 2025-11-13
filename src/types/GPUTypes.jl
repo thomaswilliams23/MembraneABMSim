@@ -1,7 +1,8 @@
+"""
+    ParamsMetal
 
-# essentially, implements GPU versions of the `AllAgentsFlat` struct (plus a few extra fields we need for force calculation)
-
-#immutable struct, lives on CPU, holds params the GPU needs for force calculations
+Immutable struct holding simulation parameters required by the GPU for force calculations.
+"""
 struct ParamsMetal
     dt::Float32
     OmpA_radius::Float32
@@ -25,8 +26,13 @@ struct ParamsMetal
     eta::Float32
 end
 
-#mutable struct, lives on CPU, holds scalar and small fixed-size vector data from the SimGrid
-#this stuff is small and changes every timestep, so lives on CPU
+
+
+"""
+    GridSizeMetal
+
+Mutable struct holding grid size and agent count information for GPU computations. Lives on CPU and updates every timestep.
+"""
 mutable struct GridSizeMetal
     dims::SVector{2, Float32}
     num_cells::SVector{2, Int}
@@ -36,7 +42,12 @@ end
 
 
 
-#mutable struct, lives on GPU, gathers all vector data the GPU needs for force calculation
+"""
+    AllDataMetal
+
+Mutable struct aggregating all vector data required by the GPU for force calculations, including agent and grid data.
+Lives on GPU.
+"""
 mutable struct AllDataMetal
     #these fields from AllAgentsFlat
     positions::MtlVector{Float32, Metal.PrivateStorage}

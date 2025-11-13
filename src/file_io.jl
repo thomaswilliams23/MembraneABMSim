@@ -14,7 +14,7 @@ end
 
 
 """
-    parse_config(file_path::String) -> AllParams
+    parse_config(file_path::String)
 
 Parses a configuration file and populates an `AllParams` struct.
 """

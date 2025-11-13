@@ -1,21 +1,40 @@
+"""
+    AbstractAgent
 
-
-#abstract types for hierarchy
+Abstract base type for all agent types in the simulation.
+"""
 abstract type AbstractAgent end
 
+"""
+    AbstractOMP <: AbstractAgent
+
+Abstract type for all OMP (outer membrane protein) agents.
+"""
 abstract type AbstractOMP <: AbstractAgent end
+
+"""
+    AbstractNascentAgent <: AbstractAgent
+
+Abstract type for all nascent agents.
+"""
 abstract type AbstractNascentAgent <: AbstractAgent end
 
+"""
+    LPSAgent <: AbstractAgent
 
-#LPS
+Represents a lipopolysaccharide (LPS) agent with index, position, and arrival time.
+"""
 mutable struct LPSAgent <: AbstractAgent
     index::Int
     position::SVector{2, Float64}
     arrival_time::Float64
 end
 
+"""
+    OmpAAgent <: AbstractOMP
 
-#OMPs
+Represents an OmpA protein agent, including tethering information.
+"""
 mutable struct OmpAAgent <: AbstractOMP
     index::Int
     position::SVector{2, Float64}
@@ -24,12 +43,22 @@ mutable struct OmpAAgent <: AbstractOMP
     tether_point::SVector{2, Float64}
 end
 
+"""
+    OmpCFAgent <: AbstractOMP
+
+Represents an OmpCF protein agent.
+"""
 mutable struct OmpCFAgent <: AbstractOMP
     index::Int
     position::SVector{2, Float64}
     arrival_time::Float64
 end
 
+"""
+    LptDAgent <: AbstractOMP
+
+Represents an LptD protein agent, including tethering and complex assembly state.
+"""
 mutable struct LptDAgent <: AbstractOMP
     index::Int
     position::SVector{2, Float64}
@@ -40,6 +69,11 @@ mutable struct LptDAgent <: AbstractOMP
     insertion_state::String
 end
 
+"""
+    BamAAgent <: AbstractOMP
+
+Represents a BamA protein agent, including complex assembly state.
+"""
 mutable struct BamAAgent <: AbstractOMP
     index::Int
     position::SVector{2, Float64}
@@ -48,8 +82,11 @@ mutable struct BamAAgent <: AbstractOMP
     insertion_state::String
 end
 
+"""
+    NascentLPSAgent <: AbstractNascentAgent
 
-#Nascent types
+Represents a nascent LPS agent, including ideal distance and associated inserting agent.
+"""
 mutable struct NascentLPSAgent <: AbstractNascentAgent
     index::Int
     position::SVector{2, Float64}
@@ -58,6 +95,11 @@ mutable struct NascentLPSAgent <: AbstractNascentAgent
     inserting_agent_index::Int
 end
 
+"""
+    NascentOMPAgent <: AbstractNascentAgent
+
+Represents a nascent OMP agent, including effective radius, ideal distance, and OMP type.
+"""
 mutable struct NascentOMPAgent <: AbstractNascentAgent
     index::Int
     position::SVector{2, Float64}
@@ -68,8 +110,11 @@ mutable struct NascentOMPAgent <: AbstractNascentAgent
     inserting_agent_index::Int
 end
 
+"""
+    AllOMPs
 
-#containers for agents
+Container for all OMP agents, grouped by type.
+"""
 mutable struct AllOMPs
     OmpA::Vector{OmpAAgent}
     OmpCF::Vector{OmpCFAgent}
@@ -77,13 +122,21 @@ mutable struct AllOMPs
     BamA::Vector{BamAAgent}
 end
 
+"""
+    AllNascent
+
+Container for all nascent agents, grouped by type.
+"""
 mutable struct AllNascent
     nascent_OMP::Vector{NascentOMPAgent}
     nascent_LPS::Vector{NascentLPSAgent}
 end
 
+"""
+    AllAgents
 
-#main container used, comprising all agents (and also the number of polypeptides)
+Main container for all agents in the simulation, including OMPs, LPS, nascent agents, and polypeptide count.
+"""
 mutable struct AllAgents
     OMP::AllOMPs
     LPS::Vector{LPSAgent}

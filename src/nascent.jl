@@ -1,7 +1,7 @@
 
 
 """
-    update_nascent_agents!(agents::AllAgents, params::AllParams, t::Float64)
+    update_nascent_agents!(agents::AllAgents, system_flat::AllAgentsFlat, params::AllParams, t::Float64)
 
 Top level function for updating spring length and effective radius of all nascent objects.
 """

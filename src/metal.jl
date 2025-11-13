@@ -1,11 +1,14 @@
 """
-metal version of initialise_system_cpu
+    initialise_system_metal(params::AllParams)
+
+Initialises the simulation system using the Metal GPU backend. Includes additional data 
+structures necessary for running the simulation with a GPU.
 """
 function initialise_system_metal(params::AllParams)
 
     #build the kernels
     non_force_position_kernel = _non_force_position_kernel!(MetalBackend())
-    force_kernel = compute_next_positions_metal!(MetalBackend())
+    force_kernel = _force_kernel!(MetalBackend())
 
     # set up output directory structure
     set_up_output_directory(params.system.output_dir)
@@ -34,17 +37,16 @@ end
 
 
 """
-    initialise_system_random_metal(params::AllParams)
+    initialise_system_random_metal(force_kernel, params::AllParams)
 
-Initialises a simulation with agents randomly placed within the domain. Runs equilibration 
-to resolve positions.
+Initialises agents randomly within the domain and runs equilibration using Metal GPU backend.
 """
 function initialise_system_random_metal(force_kernel, params::AllParams)
 
     #initialise as per CPU version
     grid_size, grid = initialise_grid(params)
     system_flat_cpu = initialise_flat_cpu(params)
-    agents = initialise_agents(grid_size, params)
+    agents = initialise_agents_random(grid_size, params)
 
     #initialise CPU-bound metal data
     grid_size_metal, params_metal = initialise_CPU_metal_data(grid_size, params)
@@ -108,7 +110,9 @@ end
 
 
 """
-initialise metal data
+    initialise_GPU_metal_data(grid_size::GridSize, params::AllParams)
+
+Initialises GPU-bound data structures needed for running the simulation on a Metal backend.
 """
 function initialise_GPU_metal_data(grid_size::GridSize, params::AllParams)
 
@@ -171,7 +175,9 @@ end
 
 
 """
-initialise metal data
+    initialise_CPU_metal_data(grid_size::GridSize, params::AllParams)
+
+Initialises CPU-bound data structures necessary for running the simulation on a Metal backend.
 """
 function initialise_CPU_metal_data(grid_size::GridSize, params::AllParams)
 
@@ -216,7 +222,9 @@ end
 
 
 """
-copies flat system data from CPU to GPU, updates grid data that the GPU kernel will use
+    copy_data_to_metal!(all_data_metal::AllDataMetal, grid_size_metal::GridSizeMetal, system_flat_cpu::AllAgentsFlat, grid_size::GridSize, grid::SimGrid)
+
+Copies agent and grid data from CPU to GPU, resizing buffers if needed.
 """
 function copy_data_to_metal!(all_data_metal::AllDataMetal, grid_size_metal::GridSizeMetal, system_flat_cpu::AllAgentsFlat, grid_size::GridSize, grid::SimGrid)
     
@@ -284,7 +292,9 @@ end
 
 
 """
-if a nascent agent has been promoted, update all nascent-related data on the GPU
+    update_nascent_promotion_metal!(all_data_metal::AllDataMetal, system_flat_cpu::AllAgentsFlat, grid_size::GridSize)
+
+In the case where a nascent agent has been promoted, copy across all updated nascent-related data to the GPU.
 """
 function update_nascent_promotion_metal!(all_data_metal::AllDataMetal, system_flat_cpu::AllAgentsFlat, grid_size::GridSize)
 
@@ -302,7 +312,9 @@ end
 
 
 """
-if any agents have newly tethered, copy across their indices to the GPU
+    update_newly_tethered_agent_ixs_metal!(all_data_metal::AllDataMetal, newly_tethered_agent_ixs::Vector{Int})
+
+In the case where agents have just become tethered, copy across their indices to the GPU.
 """
 function update_newly_tethered_agent_ixs_metal!(all_data_metal::AllDataMetal, newly_tethered_agent_ixs::Vector{Int})
 
@@ -323,7 +335,10 @@ end
 
 
 """
-computes forces on metal GPU
+    resolve_forces_metal!(force_kernel, agents::AllAgents, system_flat_cpu::AllAgentsFlat, all_data_metal::AllDataMetal, 
+                          grid_size_metal::GridSizeMetal, params_metal::ParamsMetal)
+
+Main function for computing forces and updating agent positions on the Metal GPU.
 """
 function resolve_forces_metal!(force_kernel, agents::AllAgents, system_flat_cpu::AllAgentsFlat, all_data_metal::AllDataMetal, 
                                grid_size_metal::GridSizeMetal, params_metal::ParamsMetal)
@@ -374,9 +389,31 @@ end
 
 
 """
-force kernel
+    @kernel function compute_next_positions_metal!(
+        positions::MtlDeviceVector{Float32},
+        next_positions::MtlDeviceVector{Float32},
+        effective_radii::MtlDeviceVector{Float32},
+        identifiers::MtlDeviceVector{Int},
+        tether_points::MtlDeviceVector{Float32},
+        agg_dist_since_grid_sync::MtlDeviceVector{Float32},
+        nascent_to_inserting_ixs::MtlDeviceVector{Int},
+        nascent_to_substrate_ixs::MtlDeviceVector{Int},
+        substrate_inserting_ideal_dists::MtlDeviceVector{Float32},
+        coords_to_z_ix::MtlDeviceVector{Int},
+        z_ix_to_coords::MtlDeviceVector{Int},
+        agent_cell_z_ixs::MtlDeviceVector{Int},
+        num_agents_in_cell::MtlDeviceVector{Int},
+        start_agents_in_cell::MtlDeviceVector{Int},
+        dims::SVector{2, Float32},
+        num_cells::SVector{2, Int},
+        max_effective_radius::Float32,
+        max_agg_dist::Float32,
+        params_metal::ParamsMetal
+    )
+
+Metal GPU kernel for computing next agent positions based on forces.
 """
-@kernel function compute_next_positions_metal!(
+@kernel function _force_kernel!(
     positions::MtlDeviceVector{Float32},
     next_positions::MtlDeviceVector{Float32},
     effective_radii::MtlDeviceVector{Float32},
@@ -516,7 +553,28 @@ end
 
 
 
+"""
+    function tally_attr_rep_forces_metal(
+        sorted_ix::Int, 
+        sorted_substrate_inserting_ix::Int,
+        positions::MtlDeviceVector{Float32},
+        effective_radii::MtlDeviceVector{Float32},
+        identifiers::MtlDeviceVector{Int},
+        agg_dist_since_grid_sync::MtlDeviceVector{Float32},
+        coords_to_z_ix::MtlDeviceVector{Int},
+        z_ix_to_coords::MtlDeviceVector{Int},
+        agent_cell_z_ixs::MtlDeviceVector{Int},
+        num_agents_in_cell::MtlDeviceVector{Int},
+        start_agents_in_cell::MtlDeviceVector{Int},
+        dims::SVector{2, Float32},
+        num_cells::SVector{2, Int},
+        max_effective_radius::Float32,
+        max_agg_dist::Float32,
+        params_metal::ParamsMetal
+    )
 
+Tally the total attraction/repulsion forces acting on an agent from its neighbours. Directly analogous to the CPU version.
+"""
 @inline function tally_attr_rep_forces_metal(
         sorted_ix::Int, 
         sorted_substrate_inserting_ix::Int,
@@ -623,7 +681,15 @@ end
 
 
 
-
+"""
+    function compute_attr_rep_force_metal(agent_pos::SVector{2, Float32}, agent_rad::Float32, 
+                                          neighbour_pos::SVector{2, Float32}, neighbour_rad::Float32, 
+                                          dims::SVector{2, Float32}, sensing_radius::Float32, 
+                                          mu_attr::Float32, mu_rep::Float32, max_repulsion::Float32,
+                                          rho::Float32, k_C::Float32)
+    
+Compute the attraction/repulsion force between two agents in the metal simulation.
+"""
 @inline function compute_attr_rep_force_metal(agent_pos::SVector{2, Float32}, agent_rad::Float32, 
                                       neighbour_pos::SVector{2, Float32}, neighbour_rad::Float32, 
                                       dims::SVector{2, Float32}, sensing_radius::Float32, 
@@ -668,7 +734,13 @@ end
 end
 
 
+"""
+    compute_inserting_substrate_force_metal(agent_pos::SVector{2, Float32}, neighbour_pos::SVector{2, Float32},
+                                           dims::SVector{2, Float32}, ideal_dist::Float32, 
+                                           mu_attr::Float32, mu_rep::Float32, k_C::Float32)
 
+Compute the force between an inserting agent and the substrate agent it is inserting.
+"""
 @inline function compute_inserting_substrate_force_metal(agent_pos::SVector{2, Float32}, neighbour_pos::SVector{2, Float32},
                                            dims::SVector{2, Float32}, ideal_dist::Float32, 
                                            mu_attr::Float32, mu_rep::Float32, k_C::Float32) :: SVector{2, Float32}
@@ -704,6 +776,11 @@ end
 end
 
 
+"""
+    shortest_vec_metal(pos1::SVector{2, Float32}, pos2::SVector{2, Float32}, dims::SVector{2, Float32}) :: SVector{2, Float32}
+
+Returns the shortest vector between two positions, accounting for periodic boundaries.
+"""
 @inline function shortest_vec_metal(pos1::SVector{2, Float32}, pos2::SVector{2, Float32}, dims::SVector{2, Float32}) :: SVector{2, Float32}
     raw_vec = pos2 - pos1
     # Replace broadcast operations with component-wise
@@ -714,12 +791,22 @@ end
     return wrapped_vec
 end
 
+"""
+    shortest_distance_metal(pos1::SVector{2, Float32}, pos2::SVector{2, Float32}, dims::SVector{2, Float32}) :: Float32
+
+Returns the shortest distance between two positions, accounting for periodic boundaries.
+"""
 @inline function shortest_distance_metal(pos1::SVector{2, Float32}, pos2::SVector{2, Float32}, dims::SVector{2, Float32}) :: Float32
     vec = shortest_vec_metal(pos1, pos2, dims)
     return sqrt(vec[1]*vec[1] + vec[2]*vec[2])
 end
 
 
+"""
+    fast_floor_int32(x::Float32):: Int32
+
+Efficiently computes the floor of a Float32 value and returns it as Int32. GPU-safe.
+"""
 @inline function fast_floor_int32(x::Float32):: Int32
     i = unsafe_trunc(Int32, x)        # GPU-safe, direct LLVM fptosi
     i -= (x < Float32(i))             # subtract 1 if x < i (emulates floor)
@@ -728,6 +815,12 @@ end
 
 
 
+"""
+    parse_identifier_metal(identifier::Int)
+
+Parses an agent identifier integer into its constituent properties for Metal GPU kernels.
+Returns a SVector of agent properties.
+"""
 @inline function parse_identifier_metal(identifier::Int)
 
     is_tethered = identifier < 0
@@ -751,7 +844,19 @@ end
 
 
 """
-position changes not due to forces
+    compute_non_force_position_changes!(non_force_position_kernel, agents::AllAgents, all_data_metal::AllDataMetal,
+                                       grid_size::GridSize, grid_size_metal::GridSizeMetal,
+                                       effective_rad_incs_metal::SVector{7, Float32},
+                                       ideal_dist_incs_metal::SVector{7, Float32},
+                                       nascent_added_area_lookup::NascentAddedAreaLookup,
+                                       newly_tethered_agent_ixs::Vector{Int},
+                                       params::AllParams, t::Float64)
+
+Applies non-force-driven changes to agent positions using a Metal GPU kernel. Specifically, this handles:
+ - rescaling of positions due to domain size change
+ - formation of new tethers
+ - updating nascent-inserting ideal distances
+ - updating effective radii of nascent agents
 """
 function compute_non_force_position_changes!(
     non_force_position_kernel,
@@ -816,7 +921,21 @@ end
 
 
 """
-kernel for computing non-force position changes
+    function _non_force_position_kernel!(
+    positions::MtlDeviceVector{Float32},
+    effective_radii::MtlDeviceVector{Float32},
+    identifiers::MtlDeviceVector{Int},
+    tether_points::MtlDeviceVector{Float32},
+    substrate_inserting_ideal_dists::MtlDeviceVector{Float32},
+    newly_tethered_agent_ixs::MtlDeviceVector{Int},
+    dims::SVector{2, Float32},
+    effective_rad_incs::SVector{7, Float32},
+    ideal_dist_incs::SVector{7, Float32},
+    scale_factor::Float32,
+    num_newly_tethered::Int
+    )
+
+Metal GPU kernel for computing non-force position changes.
 """
 @kernel function _non_force_position_kernel!(
     positions::MtlDeviceVector{Float32},
@@ -883,7 +1002,9 @@ end
 
 
 """
-update tether data on CPU
+    update_tether_data_cpu!(agents::AllAgents, system_flat_cpu::AllAgentsFlat, all_data_metal::AllDataMetal, grid_size_metal::GridSizeMetal)
+
+Copies across all tether point data from the GPU to the CPU and updates the tether_point fields in the AllAgents structure.
 """
 function update_tether_data_cpu!(agents::AllAgents, system_flat_cpu::AllAgentsFlat, all_data_metal::AllDataMetal, grid_size_metal::GridSizeMetal)
 

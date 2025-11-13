@@ -15,6 +15,8 @@ end
 
 
 """
+    shortest_distance(P1::SVector{2, Float64}, P2::SVector{2, Float64}, dims::SVector{2, Float64})
+
 Simple helper function to calculate the shortest distance between P1 and P2 on a 2D 
 periodic domain with dimensions dim_x x dim_y.
 """
@@ -85,7 +87,11 @@ function exposed_area(rad_ins::Float64, rad_sub::Float64, dist::Float64)
 end
 
 
+"""
+    change_field(obj, field::String, val)
 
+Changes a field in a struct `obj` to a new value `val`, returning a new struct instance. (Workaround for changing fields in an immutable struct.)
+"""
 function change_field(obj, field::String, val)
 
     #read this into a named tuples structure
@@ -106,8 +112,10 @@ end
 
 
 """
-simple function to generate an compact identifier for an agent, encoding its properties
-(this is a little bit janky but is memory efficient and fast)
+    make_identifier(;is_tethered::Bool, agent_type::String, is_inserting::Bool, is_nascent::Bool, nascent_ix::Int)
+
+Simple function to generate an compact identifier for an agent, encoding its properties
+(this is a little bit janky but is memory efficient and fast).
 """
 @inline function make_identifier(;is_tethered::Bool, agent_type::String, is_inserting::Bool, is_nascent::Bool, nascent_ix::Int)
 
@@ -148,7 +156,9 @@ end
 
 
 """
-recovers agent properties from compact identifier
+    parse_identifier(identifier::Int)
+
+Recovers agent properties from compact identifier.
 """
 @inline function parse_identifier(identifier::Int)
     num_to_agent_type = Dict(

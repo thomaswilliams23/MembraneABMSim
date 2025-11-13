@@ -1,7 +1,7 @@
 
 
 """
-    rebuild_grid!(grid::SimGrid, agents::AllAgents, sensing_radius::Float64)
+    rebuild_grid!(grid_size::GridSize, grid::SimGrid, agents::AllAgents, sensing_radius::Float64)
 
 Recomputes the spatial grid, potentially changing the number of cells, and reassigning
 agents to cells based on their current positions. Also builds two additional fields of
@@ -89,7 +89,7 @@ end
 
 
 """
-    rescale_domain!(agents::AllAgents, grid::SimGrid, params::AllParams, 
+    rescale_domain!(agents::AllAgents, system_flat::AllAgentsFlat, grid_size::GridSize, params::AllParams, 
                     nascent_added_area_lookup::NascentAddedAreaLookup, t::Float64)
 
 Computes the total amount of area added this time step (as density * total increase in exposed 
@@ -152,10 +152,13 @@ end
 
 
 """
-compute added area
+    compute_added_area(agents::AllAgents, params::AllParams, 
+                            nascent_added_area_lookup::NascentAddedAreaLookup, t::Float64)
+
+Helper function to compute the total area added this timestep from all nascent agents.
 """
 function compute_added_area(agents::AllAgents, params::AllParams, 
-                                nascent_added_area_lookup::NascentAddedAreaLookup, t::Float64)
+                            nascent_added_area_lookup::NascentAddedAreaLookup, t::Float64)
 
     added_area_this_timestep = 0.0
     for nascent_OMP in agents.nascent.nascent_OMP
@@ -184,7 +187,7 @@ end
 
 
 """
-
+    put_grid_in_sorted_order!(grid_size::GridSize, grid::SimGrid, system_flat::AllAgentsFlat)
 
 Uses the ordering in system_flat to redefine grid fields in terms of sorted agent indices.
 """

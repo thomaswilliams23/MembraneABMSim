@@ -1,7 +1,7 @@
 
 
 """
-    update_BAM_subsystem!(agents::AllAgents, grid::SimGrid, system_flat::AllAgentsFlat, params::AllParams, t::Float64)
+    update_BAM_subsystem!(agents::AllAgents, grid_size::GridSize, grid::SimGrid, system_flat::AllAgentsFlat, params::AllParams, t::Float64)
 
 Updates the BAM subsystem of the system. Specifically, iterates over all (assembled) BamA agents and checks
 for changes in insertion state. If necessary, inserts new nascent objects, or changes fully-inserted nascent 
@@ -251,7 +251,10 @@ end
 
 
 """
-update nascent data in flat structure
+    update_flat_data_nascent_agents!(agents::AllAgents, system_flat::AllAgentsFlat)
+
+Updates all flat data structure fields relevant to nascent agents, including identifiers, inserting-substrate 
+mappings, and ideal distances.
 """
 function update_flat_data_nascent_agents!(agents::AllAgents, system_flat::AllAgentsFlat)
 
@@ -320,7 +323,7 @@ end
 
 
 """
-    generate_nascent_OMP_obj!(agents::AllAgents, grid::SimGrid, BamA::BamAAgent, arrival_time::Float64, params::AllParams)
+    generate_nascent_OMP_obj!(agents::AllAgents, grid_size::GridSize, BamA::BamAAgent, arrival_time::Float64, params::AllParams)
 
 Given an inserting BamA agent (and other relevant information), generates a new nascent OMP somewhere on the
 interior of the edge of the BamA and writes the new nascent OMP into the agents structure. Also updates total
@@ -383,7 +386,7 @@ end
 
 
 """
-    update_Lpt_subsystem!(agents::AllAgents, grid::SimGrid, params::AllParams, t::Float64)
+    update_Lpt_subsystem!(agents::AllAgents, grid_size::GridSize, system_flat::AllAgentsFlat, params::AllParams, t::Float64)
 
 Updates the Lpt subsystem of the system. Specifically, iterates over all (assembled) LptD agents and checks
 for changes in insertion state. If necessary, generates new nascent LPS or changes fully-inserted nascent LPS
@@ -468,7 +471,7 @@ end
 
 
 """
-    generate_nascent_LPS_obj!(agents::AllAgents, grid::SimGrid, LptD::LptDAgent, arrival_time::Float64, params::AllParams)
+    generate_nascent_LPS_obj!(agents::AllAgents, grid_size::GridSize, LptD::LptDAgent, arrival_time::Float64, params::AllParams)
 
 Given an inserting LptD agent (and other relevant information), generates a new nascent LPS somewhere on the
 interior of the edge of the LptD and writes the new nascent LPS into the agents structure. Also updates total
@@ -508,7 +511,7 @@ end
 
 
 """
-    function update_tethering_and_assembly!(agents::AllAgents, system_flat_cpu::AllAgentsFlat, params::AllParams)
+    update_tethering_and_assembly!(agents::AllAgents, system_flat_cpu::AllAgentsFlat, params::AllParams)
 
 Iterates through all agents which can be tethered or assembled but haven't been already and checks
 for new tether formation or assembly.

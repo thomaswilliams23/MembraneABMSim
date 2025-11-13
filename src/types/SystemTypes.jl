@@ -1,6 +1,8 @@
+"""
+    AllAgentsFlat
 
-#specifies a type to store flat representations of all agents for efficient force calculation
-
+Mutable struct storing flat representations of all agents for efficient force calculations. Contains position, radius, identifiers, and mapping vectors.
+"""
 mutable struct AllAgentsFlat
     positions::Vector{Float64}
     next_positions::Vector{Float64}
@@ -15,7 +17,11 @@ mutable struct AllAgentsFlat
     sorted_ix_to_agent_ix::Vector{Int}
 end
 
+"""
+    NascentAddedAreaLookup
 
+Struct holding lookup tables for added area by nascent agents of each type.
+"""
 struct NascentAddedAreaLookup
     OmpA::Vector{Float64}
     OmpCF::Vector{Float64}

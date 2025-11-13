@@ -1,6 +1,10 @@
 
 
+"""
+    build_sim_dict(sweep_config::SweepParams)
 
+Helper function to build a dictionary of simulation parameter combinations for a given sweep configuration.
+"""
 function build_sim_dict(sweep_config::SweepParams)
     
     #calculate number of parameter combinations
@@ -38,7 +42,12 @@ function build_sim_dict(sweep_config::SweepParams)
 end
 
 
+"""
+    make_config_this_sim(params::AllParams, sim_param_changes::Dict{String, Any}, output_dir::String)
 
+Helper function to make a config for a specific simulation, given a base parameter set, a dictionary of parameter 
+changes for this simulation, and an output directory.
+"""
 function make_config_this_sim(params::AllParams, sim_param_changes::Dict{String, Any}, output_dir::String)
 
     for (param_path, param_val) in sim_param_changes
@@ -51,6 +60,11 @@ function make_config_this_sim(params::AllParams, sim_param_changes::Dict{String,
 end
 
 
+"""
+    modify_params(params, param_path::String, param_val)
+
+Helper function to modify a parameter in the params structure, given its path as a string (with '/' separators) and the new value.
+"""
 function modify_params(params, param_path::String, param_val)
 
     #change the parameter specified by param_path to param_val

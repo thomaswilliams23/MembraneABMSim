@@ -186,7 +186,9 @@ end
 
 
 """
-run sweep
+    run_sweep(sweep_config_pathname::String)
+
+Wrapper around `run_sim` to run a parameter sweep as specified in a sweep config JSON file.
 """
 function run_sweep(sweep_config_pathname::String)
 
