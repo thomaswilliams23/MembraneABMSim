@@ -34,6 +34,10 @@ function build_sim_dict(sweep_config::SweepParams)
             param_vals_this_sim[param_path] = param_vals.values[cartesian[param_ix]]
         end
 
+        #also set the random seed to the replicate number
+        #TODO: this assumes the default config has a seed parameter set
+        param_vals_this_sim["system/seed"] = cartesian[length(param_array_size)]
+
         #read into the overall dictionary
         sim_dict[sim_path_name] = param_vals_this_sim
     end
