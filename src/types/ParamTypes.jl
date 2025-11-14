@@ -156,7 +156,7 @@ end
 """
     SweepParams
 
-Container for parameter sweep configuration, including sweep parameters, repetitions, and output directory.
+Container for parameter sweep configuration, including sweep parameters, replicate number, and output directory.
 """
 struct SweepParams
     sweep_params::Dict{String, SweepParamValues}
