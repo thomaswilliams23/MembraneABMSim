@@ -68,6 +68,9 @@ function copy_config_to_output_dir(file_path::String, output_dir::String)
         mkpath(out_path)
     end
     config_file_copy=joinpath(out_path, "config.json")
+    if isfile(config_file_copy)
+        rm(config_file_copy; force=true)
+    end
     cp(file_path, config_file_copy, force=true)
 end
 
