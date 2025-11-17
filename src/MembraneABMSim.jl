@@ -31,11 +31,20 @@ module MembraneABMSim
     include("main.jl")
     include("metal.jl")
     include("nascent.jl")
+    include("postprocessing.jl")
     include("sweep.jl")
     include("update_grid.jl")
     include("utils.jl")
     include("vis_membrane.jl")
 
-    export run_sim, run_sweep, make_membrane_movie
+    export parse_config
+    export parse_sweep_config
+    export run_sim
+    export run_sweep
+    export make_membrane_movie
+    export get_time_series
+    export get_membrane_size
+    export analyse_sim
+    export analyse_sweep
 
 end # module MembraneABMSim

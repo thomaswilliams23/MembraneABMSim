@@ -7,3 +7,7 @@ TMP_*.jl
 
 #ignore vscode settings
 .vscode/
+
+#ignore workbooks
+workbooks/*.ipynb
+workbooks/*.jl
