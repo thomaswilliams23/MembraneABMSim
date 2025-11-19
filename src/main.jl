@@ -67,11 +67,25 @@ function run_sim(config_pathname::String)
     write_system_state(agents, grid_size.dims, params.system.output_dir, time_ix)
 
 
+
+    #DEBUG
+    flag=false
+
+
     #main loop
     steps_since_grid_sync = 0
     MAX_STEPS_BETWEEN_GRID_SYNC = 100 #temporary
     time_err = 0.1*params.system.dt
     while t<params.system.t_max - time_err
+
+
+
+        #DEBUG
+        if the_code_broke(agents, grid_size, params)
+            error("The code broke at time $t at the top of the loop")
+        end
+
+
 
         #update BAM subsystem
         update_BAM_subsystem!(agents, grid_size, grid, system_flat_cpu, params, t)
@@ -79,12 +93,24 @@ function run_sim(config_pathname::String)
         #update Lpt subsystem
         update_Lpt_subsystem!(agents, grid_size, system_flat_cpu, params, t)
 
+
+
+
+        #DEBUG
+        if the_code_broke(agents, grid_size, params)
+            error("The code broke at time $t after updating biology subsystems")
+        end
+
+
+
+
+
         #if we added new agents, need to update grid and flat data structure
         if grid_size.num_agents_changed
 
             #if using metal, copy data back to CPU to rebuild grid
             if device=="metal"
-                update_tether_data_cpu!(agents, system_flat_cpu, all_data_metal, grid_size_metal)
+                copy_data_to_cpu!(system_flat_cpu, agents, all_data_metal, grid_size_metal)
             end
 
             #rebuild grid and flat data structures
@@ -95,6 +121,15 @@ function run_sim(config_pathname::String)
             #if using metal, copy data to GPU
             if device=="metal"
                 copy_data_to_metal!(all_data_metal, grid_size_metal, system_flat_cpu, grid_size, grid)
+            end
+
+
+
+
+
+            #DEBUG
+            if the_code_broke(agents, grid_size, params)
+                error("The code broke at time $t after rebuilding the grid (new agent added)")
             end
 
             steps_since_grid_sync = 0
@@ -117,6 +152,16 @@ function run_sim(config_pathname::String)
         update_nascent_agents!(agents, system_flat_cpu, effective_rad_incs, ideal_dist_incs)
 
 
+
+
+        #DEBUG
+        if the_code_broke(agents, grid_size, params)
+            error("The code broke at time $t after updating nascent agents and tethering")
+        end
+
+
+
+
         #rescale the domain and all agent positions
         if device=="cpu"
             rescale_domain!(agents, system_flat_cpu, grid_size, params, nascent_added_area_lookup, t)
@@ -136,14 +181,32 @@ function run_sim(config_pathname::String)
             )
         end
 
+
+
+        #DEBUG
+        if the_code_broke(agents, grid_size, params)
+            error("The code broke at time $t after running position updates")
+        end
+
+
+
+
+
         #if it has been too long since last grid sync, rebuild grid and flat data structures
         if steps_since_grid_sync >= MAX_STEPS_BETWEEN_GRID_SYNC
 
             #if using metal, copy data back to CPU to rebuild grid
             if device=="metal"
-                update_tether_data_cpu!(agents, system_flat_cpu, all_data_metal, grid_size_metal)
+                copy_data_to_cpu!(system_flat_cpu, agents, all_data_metal, grid_size_metal)
             end
 
+
+            #DEBUG
+            if the_code_broke(agents, grid_size, params)
+                error("The code broke at time $t before rebuilding the grid (scheduled grid sync)")
+            end
+
+            
             #rebuild grid and flat data structures
             rebuild_grid!(grid_size, grid, agents, params.force.sensing_radius)
             compile_flat_system_data_cpu!(system_flat_cpu, agents, grid_size, grid, params)
@@ -154,17 +217,55 @@ function run_sim(config_pathname::String)
                 copy_data_to_metal!(all_data_metal, grid_size_metal, system_flat_cpu, grid_size, grid)
             end
 
+
+            #DEBUG
+            if the_code_broke(agents, grid_size, params)
+                error("The code broke at time $t after rebuilding the grid (scheduled grid sync)")
+            end
+
+
             steps_since_grid_sync = 0
         else
             steps_since_grid_sync += 1
         end
+
+
+
+        #DEBUG
+        if the_code_broke(agents, grid_size, params)
+            print_error_message(agents, grid_size, params)
+            error("The code broke at time $t right before resolving forces")
+        end
+
+
+
+
 
         #resolve inter-agent forces and diffusion
         if device=="cpu"
             compute_diffusion!(agents, system_flat_cpu, grid_size, params)
             resolve_forces_cpu!(agents, grid_size, grid, system_flat_cpu, params)
         elseif device=="metal"
-            resolve_forces_metal!(force_kernel, agents, system_flat_cpu, all_data_metal, grid_size_metal, params_metal)
+            resolve_forces_metal!(force_kernel, all_data_metal, grid_size_metal, params_metal)
+            copy_data_to_cpu = copy_data_to_cpu_yn(agents.OMP.BamA, params, t)
+            if copy_data_to_cpu
+
+
+                # #DEBUG
+                # if flag
+                #     println("Copying data back to CPU at time $t after force resolution")
+                # end
+
+
+                copy_data_to_cpu!(system_flat_cpu, agents, all_data_metal, grid_size_metal)
+            end
+        end
+
+
+        #DEBUG
+        if the_code_broke(agents, grid_size, params)
+            print_error_message(agents, grid_size, params)
+            error("The code broke at time $t after resolving forces")
         end
 
 
@@ -176,10 +277,15 @@ function run_sim(config_pathname::String)
             time_ix = round(Int, t/params.system.vis_dt)
             write_system_state(agents, grid_size.dims, params.system.output_dir, time_ix)
 
-            @printf "Running: t=%5.2f\r" t
+            #@printf "Running: t=%5.2f\r" t
+
+
+            # #DEBUG
+            # println("time is $t")
         end
     end
 
+    println("Simulation complete.")
     return
 end
 
@@ -221,4 +327,56 @@ function run_sweep(sweep_config_pathname::String)
         run_sim(config_fname)
     end
 
+end
+
+
+
+
+
+
+
+
+
+function the_code_broke(agents::AllAgents, grid_size::GridSize, params::AllParams)
+    for agent in agents.OMP.OmpA
+        if agent.is_tethered
+            distance = shortest_distance(agent.position, agent.tether_point, grid_size.dims)
+            if distance > 1.00001*params.OmpA.tether_radius
+                return true
+            end
+        end
+    end
+
+    for agent in agents.OMP.LptD
+        if agent.is_tethered
+            distance = shortest_distance(agent.position, agent.tether_point, grid_size.dims)
+            if distance > 1.00001*params.LptD.tether_radius
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
+
+
+function print_error_message(agents::AllAgents, grid_size::GridSize, params::AllParams)
+    for agent in agents.OMP.OmpA
+        if agent.is_tethered
+            distance = shortest_distance(agent.position, agent.tether_point, grid_size.dims)
+            if distance > 1.00001*params.OmpA.tether_radius
+                println("OmpA agent $(agent.index) tethered distance $distance exceeds limit $(params.OmpA.tether_radius)")
+            end
+        end
+    end
+
+    for agent in agents.OMP.LptD
+        if agent.is_tethered
+            distance = shortest_distance(agent.position, agent.tether_point, grid_size.dims)
+            if distance > 1.00001*params.LptD.tether_radius
+                println("LptD agent $(agent.index) tethered distance $distance exceeds limit $(params.LptD.tether_radius)")
+            end
+        end
+    end
 end

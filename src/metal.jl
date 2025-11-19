@@ -70,6 +70,9 @@ function initialise_system_random_metal(force_kernel, params::AllParams)
     while t < params.init.equilibration_time - time_err
 
         if steps_since_grid_sync >= MAX_STEPS_BETWEEN_GRID_SYNC
+
+            copy_data_to_cpu!(system_flat_cpu, agents, all_data_metal, grid_size_metal)
+
             rebuild_grid!(grid_size, grid, agents, params.force.sensing_radius)
             compile_flat_system_data_cpu!(system_flat_cpu, agents, grid_size, grid, params)
             put_grid_in_sorted_order!(grid_size, grid, system_flat_cpu)
@@ -81,7 +84,14 @@ function initialise_system_random_metal(force_kernel, params::AllParams)
             steps_since_grid_sync += 1
         end
 
-        resolve_forces_metal!(force_kernel, agents, system_flat_cpu, all_data_metal, grid_size_metal, params_metal)
+        resolve_forces_metal!(
+            force_kernel, 
+            all_data_metal, 
+            grid_size_metal, 
+            params_metal
+        )
+        KernelAbstractions.synchronize(MetalBackend())
+        copyto!(all_data_metal.positions, all_data_metal.next_positions[1:2*grid_size_metal.num_agents])
         
         t += params.system.dt
 
@@ -93,6 +103,14 @@ function initialise_system_random_metal(force_kernel, params::AllParams)
     end
 
     println("\nEquilibration complete.")
+
+    #now copy across to cpu
+    if params.init.equilibration_time > time_err
+        copy_data_to_cpu!(system_flat_cpu, agents, all_data_metal, grid_size_metal)
+    else
+        #if no equilibration, still need to copy initial positions across
+        copyto!(all_data_metal.next_positions, all_data_metal.positions[1:2*grid_size_metal.num_agents])
+    end
 
     #if specified, set all agents as assembled/tethered
     if params.init.complexes_assembled
@@ -227,7 +245,7 @@ end
 Copies agent and grid data from CPU to GPU, resizing buffers if needed.
 """
 function copy_data_to_metal!(all_data_metal::AllDataMetal, grid_size_metal::GridSizeMetal, system_flat_cpu::AllAgentsFlat, grid_size::GridSize, grid::SimGrid)
-    
+
     #handle resizing
     curr_agent_vec_capacity = length(all_data_metal.effective_radii)
     curr_grid_vec_capacity = length(all_data_metal.num_agents_in_cell)
@@ -262,6 +280,7 @@ function copy_data_to_metal!(all_data_metal::AllDataMetal, grid_size_metal::Grid
 
     #copy across flat system data
     copyto!(all_data_metal.positions, system_flat_cpu.positions[1:2*grid_size.num_agents])
+    copyto!(all_data_metal.next_positions, system_flat_cpu.positions[1:2*grid_size.num_agents])
     copyto!(all_data_metal.effective_radii, system_flat_cpu.effective_radii[1:grid_size.num_agents])
     copyto!(all_data_metal.identifiers, system_flat_cpu.identifiers[1:grid_size.num_agents])
     copyto!(all_data_metal.tether_points, system_flat_cpu.tether_points[1:2*grid_size.num_agents])
@@ -286,9 +305,90 @@ function copy_data_to_metal!(all_data_metal::AllDataMetal, grid_size_metal::Grid
         copyto!(all_data_metal.coords_to_z_ix, grid.coords_to_z_ix[1:grid_size.tot_num_cells])
         copyto!(all_data_metal.z_ix_to_coords, grid.z_ix_to_coords[1:2*grid_size.tot_num_cells])
         grid_size_metal.num_cells = grid_size.num_cells
+        grid_size_metal.tot_num_cells = grid_size.tot_num_cells
     end
 
 end
+
+
+
+
+"""
+    copy_data_to_cpu!(system_flat_cpu::AllAgentsFlat, agents::AllAgents, all_data_metal::AllDataMetal)
+
+Copies position and aggregate distance data from GPU to CPU.
+"""
+function copy_data_to_cpu!(system_flat_cpu::AllAgentsFlat, agents::AllAgents, all_data_metal::AllDataMetal, grid_size_metal::GridSizeMetal)
+
+    #make sure all previous GPU operations are complete
+    KernelAbstractions.synchronize(MetalBackend())
+
+    #copy the new positions and aggregate distances out to the cpu
+    copyto!(system_flat_cpu.positions, all_data_metal.next_positions[1:2*grid_size_metal.num_agents])
+    copyto!(system_flat_cpu.agg_dist_since_grid_sync, all_data_metal.agg_dist_since_grid_sync[1:grid_size_metal.num_agents])
+    copyto!(system_flat_cpu.tether_points, all_data_metal.tether_points[1:2*grid_size_metal.num_agents])
+    
+    #write new positions into AllAgents structure
+    all_agents = Iterators.flatten((agents.OMP.OmpA, agents.OMP.OmpCF, agents.OMP.LptD, agents.OMP.BamA, 
+                                    agents.LPS, agents.nascent.nascent_OMP, agents.nascent.nascent_LPS))
+    for agent in all_agents
+        agent_ix = agent.index
+        if agent_ix>grid_size_metal.num_agents
+            continue
+        end
+        sorted_ix = system_flat_cpu.agent_ix_to_sorted_ix[agent_ix]
+        agent.position = SVector{2, Float64}(system_flat_cpu.positions[2*sorted_ix-1], system_flat_cpu.positions[2*sorted_ix])
+    end
+
+    #now iterate through all tethered agents and update their tether points
+    all_tetherable_agents = Iterators.flatten((agents.OMP.OmpA, agents.OMP.LptD))
+    for agent in all_tetherable_agents
+        if agent.is_tethered
+            agent_ix = agent.index
+            if agent_ix>grid_size_metal.num_agents
+                continue
+            end
+            sorted_ix = system_flat_cpu.agent_ix_to_sorted_ix[agent_ix]
+            agent.tether_point = SVector{2, Float64}(
+                system_flat_cpu.tether_points[2*sorted_ix-1], 
+                system_flat_cpu.tether_points[2*sorted_ix]
+            )
+        end
+    end
+end
+
+
+
+"""
+    copy_data_to_cpu_yn(agents::AllAgents, t::Float64)
+
+Decides whether to copy data back to CPU this time step based on agent types and current time.
+"""
+function copy_data_to_cpu_yn(BamA_agents::Vector{BamAAgent}, params::AllParams, t::Float64)
+
+    t_next_time_step = t + params.system.dt
+
+    #first check if there is a BamA in the bound state, and we will attempt insertion on the next time step
+    attempt_dt_err = 0.1 * params.system.dt
+    if abs(t_next_time_step/params.insertion.attempt_dt - round(t_next_time_step/params.insertion.attempt_dt))<attempt_dt_err
+        for BamA in BamA_agents
+            if BamA.insertion_state == "bound"
+                return true
+            end
+        end
+    end
+
+    #next check if we need to copy data out for visualisation this time step
+    time_err = 0.1 * params.system.dt
+    if abs(t_next_time_step/params.system.vis_dt - round(t_next_time_step/params.system.vis_dt))<time_err
+        return true
+    end
+
+    return false
+
+end
+
+
 
 
 """
@@ -297,6 +397,9 @@ end
 In the case where a nascent agent has been promoted, copy across all updated nascent-related data to the GPU.
 """
 function update_nascent_promotion_metal!(all_data_metal::AllDataMetal, system_flat_cpu::AllAgentsFlat, grid_size::GridSize)
+
+    #check that no GPU processes are ongoing
+    KernelAbstractions.synchronize(MetalBackend())
 
     #update nascent to inserting indices
     copyto!(all_data_metal.nascent_to_inserting_ixs, system_flat_cpu.nascent_to_inserting_ixs)
@@ -318,6 +421,9 @@ In the case where agents have just become tethered, copy across their indices to
 """
 function update_newly_tethered_agent_ixs_metal!(all_data_metal::AllDataMetal, newly_tethered_agent_ixs::Vector{Int})
 
+    #check that no GPU processes are ongoing
+    KernelAbstractions.synchronize(MetalBackend())
+
     #handle resizing
     curr_capacity = length(all_data_metal.newly_tethered_agent_ixs)
     if length(newly_tethered_agent_ixs)>curr_capacity
@@ -333,18 +439,24 @@ end
 
 
 
-
 """
-    resolve_forces_metal!(force_kernel, agents::AllAgents, system_flat_cpu::AllAgentsFlat, all_data_metal::AllDataMetal, 
-                          grid_size_metal::GridSizeMetal, params_metal::ParamsMetal)
+    resolve_forces_metal!(force_kernel, all_data_metal::AllDataMetal, grid_size_metal::GridSizeMetal, params_metal::ParamsMetal)
 
 Main function for computing forces and updating agent positions on the Metal GPU.
 """
-function resolve_forces_metal!(force_kernel, agents::AllAgents, system_flat_cpu::AllAgentsFlat, all_data_metal::AllDataMetal, 
-                               grid_size_metal::GridSizeMetal, params_metal::ParamsMetal)
-    
+function resolve_forces_metal!(force_kernel, all_data_metal::AllDataMetal, grid_size_metal::GridSizeMetal, params_metal::ParamsMetal)
+
+    #ensure all previous GPU operations are complete
+    KernelAbstractions.synchronize(MetalBackend())
+
+    #update positions field on GPU
+    copyto!(all_data_metal.positions, all_data_metal.next_positions[1:2*grid_size_metal.num_agents])
+
+    #some calculations needed for kernel
     max_effective_radius = Float32(max(params_metal.OmpA_radius, params_metal.OmpCF_radius, params_metal.LptD_radius, params_metal.BamA_radius, params_metal.LPS_radius))
-    max_agg_dist = Float32(maximum(system_flat_cpu.agg_dist_since_grid_sync))
+    max_agg_dist = maximum(all_data_metal.agg_dist_since_grid_sync)
+
+    #run the force kernel
     force_kernel(
         all_data_metal.positions,
         all_data_metal.next_positions,
@@ -367,24 +479,6 @@ function resolve_forces_metal!(force_kernel, agents::AllAgents, system_flat_cpu:
         params_metal;
         ndrange=grid_size_metal.num_agents
     )
-    KernelAbstractions.synchronize(MetalBackend())
-
-    #copy the new positions and aggregate distances out to the cpu
-    copyto!(system_flat_cpu.positions, all_data_metal.next_positions[1:2*grid_size_metal.num_agents])
-    copyto!(system_flat_cpu.agg_dist_since_grid_sync, all_data_metal.agg_dist_since_grid_sync[1:grid_size_metal.num_agents])
-
-    #update positions field on GPU
-    copyto!(all_data_metal.positions, all_data_metal.next_positions[1:2*grid_size_metal.num_agents])
-
-    #write new positions into AllAgents structure
-    all_agents = Iterators.flatten((agents.OMP.OmpA, agents.OMP.OmpCF, agents.OMP.LptD, agents.OMP.BamA, 
-                                    agents.LPS, agents.nascent.nascent_OMP, agents.nascent.nascent_LPS))
-    for agent in all_agents
-        agent_ix = agent.index
-        sorted_ix = system_flat_cpu.agent_ix_to_sorted_ix[agent_ix]
-        agent.position = SVector{2, Float64}(system_flat_cpu.positions[2*sorted_ix-1], system_flat_cpu.positions[2*sorted_ix])
-    end
-
 end
 
 
@@ -873,6 +967,13 @@ function compute_non_force_position_changes!(
     )
 
 
+    #make sure all previous GPU operations are complete
+    KernelAbstractions.synchronize(MetalBackend())
+
+    #update positions field on GPU
+    copyto!(all_data_metal.positions, all_data_metal.next_positions[1:2*grid_size_metal.num_agents])
+
+
     #first, compute the added area
     added_area_this_timestep = compute_added_area(agents, params, nascent_added_area_lookup, t)
     
@@ -897,6 +998,7 @@ function compute_non_force_position_changes!(
     num_newly_tethered = length(newly_tethered_agent_ixs)
     non_force_position_kernel(
         all_data_metal.positions,
+        all_data_metal.next_positions,
         all_data_metal.effective_radii,
         all_data_metal.identifiers,
         all_data_metal.tether_points,
@@ -909,7 +1011,6 @@ function compute_non_force_position_changes!(
         num_newly_tethered;
         ndrange=grid_size_metal.num_agents
     )
-    KernelAbstractions.synchronize(MetalBackend())
 
     #change dims etc HERE (not before kernel call)
     grid_size.dims *= scale_factor
@@ -923,6 +1024,7 @@ end
 """
     function _non_force_position_kernel!(
         positions::MtlDeviceVector{Float32},
+        next_positions::MtlDeviceVector{Float32},
         effective_radii::MtlDeviceVector{Float32},
         identifiers::MtlDeviceVector{Int},
         tether_points::MtlDeviceVector{Float32},
@@ -939,6 +1041,7 @@ Metal GPU kernel for computing non-force position changes.
 """
 @kernel function _non_force_position_kernel!(
     positions::MtlDeviceVector{Float32},
+    next_positions::MtlDeviceVector{Float32},
     effective_radii::MtlDeviceVector{Float32},
     identifiers::MtlDeviceVector{Int},
     tether_points::MtlDeviceVector{Float32},
@@ -989,38 +1092,12 @@ Metal GPU kernel for computing non-force position changes.
             dims
         )
     end
-    positions[2*sorted_ix-1] *= scale_factor
-    positions[2*sorted_ix]   *= scale_factor
+    next_positions[2*sorted_ix-1] = scale_factor * positions[2*sorted_ix-1]
+    next_positions[2*sorted_ix]   = scale_factor * positions[2*sorted_ix]
     if is_tethered==1
-        new_tether_pos = SVector{2, Float32}(positions[2*sorted_ix-1], positions[2*sorted_ix]) + agent_to_tether_vec
+        new_tether_pos = SVector{2, Float32}(next_positions[2*sorted_ix-1], next_positions[2*sorted_ix]) + agent_to_tether_vec
         tether_points[2*sorted_ix-1] = new_tether_pos[1]
         tether_points[2*sorted_ix] = new_tether_pos[2]
     end
 
-end
-
-
-
-"""
-    update_tether_data_cpu!(agents::AllAgents, system_flat_cpu::AllAgentsFlat, all_data_metal::AllDataMetal, grid_size_metal::GridSizeMetal)
-
-Copies across all tether point data from the GPU to the CPU and updates the tether_point fields in the AllAgents structure.
-"""
-function update_tether_data_cpu!(agents::AllAgents, system_flat_cpu::AllAgentsFlat, all_data_metal::AllDataMetal, grid_size_metal::GridSizeMetal)
-
-    #first copy the vector across
-    copyto!(system_flat_cpu.tether_points, all_data_metal.tether_points[1:2*grid_size_metal.num_agents])
-
-    #now iterate through all tethered agents and update their tether points
-    all_tetherable_agents = Iterators.flatten((agents.OMP.OmpA, agents.OMP.LptD))
-    for agent in all_tetherable_agents
-        if agent.is_tethered
-            agent_ix = agent.index
-            sorted_ix = system_flat_cpu.agent_ix_to_sorted_ix[agent_ix]
-            agent.tether_point = SVector{2, Float64}(
-                system_flat_cpu.tether_points[2*sorted_ix-1], 
-                system_flat_cpu.tether_points[2*sorted_ix]
-            )
-        end
-    end
 end
