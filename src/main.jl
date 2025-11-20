@@ -67,6 +67,18 @@ function run_sim(config_pathname::String)
     write_system_state(agents, grid_size.dims, params.system.output_dir, time_ix)
 
 
+
+    # #DEBUG
+    # println("About to run simulation")
+    # for LptD in agents.OMP.LptD
+    #     if LptD.is_tethered
+    #         sorted_ix = system_flat_cpu.agent_ix_to_sorted_ix[LptD.index]
+    #         identifier = system_flat_cpu.identifiers[sorted_ix]
+    #         println("LptD agent $(sorted_ix) is tethered at start of sim with identifier $identifier")
+    #     end
+    # end
+
+
     #main loop
     steps_since_grid_sync = 0
     MAX_STEPS_BETWEEN_GRID_SYNC = 100 #temporary
@@ -84,7 +96,7 @@ function run_sim(config_pathname::String)
 
             #if using metal, copy data back to CPU to rebuild grid
             if device=="metal"
-                update_tether_data_cpu!(agents, system_flat_cpu, all_data_metal, grid_size_metal)
+                copy_data_to_cpu!(system_flat_cpu, agents, all_data_metal, grid_size_metal)
             end
 
             #rebuild grid and flat data structures
@@ -116,7 +128,6 @@ function run_sim(config_pathname::String)
         #update any nascent agents
         update_nascent_agents!(agents, system_flat_cpu, effective_rad_incs, ideal_dist_incs)
 
-
         #rescale the domain and all agent positions
         if device=="cpu"
             rescale_domain!(agents, system_flat_cpu, grid_size, params, nascent_added_area_lookup, t)
@@ -136,12 +147,13 @@ function run_sim(config_pathname::String)
             )
         end
 
+
         #if it has been too long since last grid sync, rebuild grid and flat data structures
         if steps_since_grid_sync >= MAX_STEPS_BETWEEN_GRID_SYNC
 
             #if using metal, copy data back to CPU to rebuild grid
             if device=="metal"
-                update_tether_data_cpu!(agents, system_flat_cpu, all_data_metal, grid_size_metal)
+                copy_data_to_cpu!(system_flat_cpu, agents, all_data_metal, grid_size_metal)
             end
 
             #rebuild grid and flat data structures
@@ -159,14 +171,18 @@ function run_sim(config_pathname::String)
             steps_since_grid_sync += 1
         end
 
+
         #resolve inter-agent forces and diffusion
         if device=="cpu"
             compute_diffusion!(agents, system_flat_cpu, grid_size, params)
             resolve_forces_cpu!(agents, grid_size, grid, system_flat_cpu, params)
         elseif device=="metal"
-            resolve_forces_metal!(force_kernel, agents, system_flat_cpu, all_data_metal, grid_size_metal, params_metal)
+            resolve_forces_metal!(force_kernel, all_data_metal, grid_size_metal, params_metal)
+            copy_data_to_cpu = copy_data_to_cpu_yn(agents.OMP.BamA, params, t)
+            if copy_data_to_cpu
+                copy_data_to_cpu!(system_flat_cpu, agents, all_data_metal, grid_size_metal)
+            end
         end
-
 
         #step time
         t += params.system.dt
@@ -180,6 +196,7 @@ function run_sim(config_pathname::String)
         end
     end
 
+    println("Simulation complete.")
     return
 end
 

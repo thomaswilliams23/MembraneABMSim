@@ -119,7 +119,8 @@ Simple function to generate an compact identifier for an agent, encoding its pro
 """
 @inline function make_identifier(;is_tethered::Bool, agent_type::String, is_inserting::Bool, is_nascent::Bool, nascent_ix::Int)
 
-    @assert nascent_ix<990 "There are too many nascent agents being inserted at once ($nascent_ix), cannot encode in identifier!"
+    @assert nascent_ix<99 "There are too many nascent agents being inserted at once ($nascent_ix), cannot encode in identifier!"
+    @assert !(is_inserting && is_nascent) "An agent cannot be both inserting and nascent!"
 
     agent_type_to_num = Dict(
         "OmpA" => 1,
@@ -130,9 +131,6 @@ Simple function to generate an compact identifier for an agent, encoding its pro
     )
 
     identifier = agent_type_to_num[agent_type]
-    if is_tethered
-        identifier *= -1
-    end
 
     if is_inserting
         identifier += 10*nascent_ix
@@ -143,12 +141,9 @@ Simple function to generate an compact identifier for an agent, encoding its pro
         identifier += 1000
     end
 
-
-    #BUGFIX
-    if abs(identifier)>1e6
-        error("Generated junk identifier: $identifier")
+    if is_tethered
+        identifier *= -1
     end
-
 
     return identifier
 end
@@ -181,13 +176,6 @@ Recovers agent properties from compact identifier.
     end
     nascent_ix = floor(Int, identifier / 10)
     identifier -= nascent_ix * 10
-
-
-    #BUGFIX
-    if identifier ∉ keys(num_to_agent_type)
-        return false, "Unknown", true, true, -1
-    end
-
 
     agent_type = num_to_agent_type[identifier]
     return is_tethered, agent_type, is_nascent, is_inserting, nascent_ix

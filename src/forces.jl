@@ -8,6 +8,12 @@ default, on the GPU as an option.
 """
 function resolve_forces_cpu!(agents::AllAgents, grid_size::GridSize, grid::SimGrid, system_flat::AllAgentsFlat, params::AllParams)
 
+
+    # #DEBUG
+    # println("Starting a new round of force resolution")
+    # println("--------------------------------------")
+
+
     #compute the max aggregate distance since last grid sync
     max_agg_dist = maximum(system_flat.agg_dist_since_grid_sync)
     
@@ -276,6 +282,30 @@ function compute_next_position(sorted_ix::Int, system_flat::AllAgentsFlat, grid_
 
     is_tethered, agent_type, is_nascent, is_inserting, nascent_ix = parse_identifier(identifier)
 
+
+
+    # #DEBUG
+    # if sorted_ix == 16
+    #     println("Computing next position for agent $sorted_ix of type $agent_type (is_tethered=$is_tethered, is_nascent=$is_nascent, is_inserting=$is_inserting, nascent_ix=$nascent_ix)")
+    #     println("Agent position is (",
+    #         system_flat.positions[2*sorted_ix-1], ", ",
+    #         system_flat.positions[2*sorted_ix], ")"
+    #     )
+    #     println("Tether position is (",
+    #         system_flat.tether_points[2*sorted_ix-1], ", ",
+    #         system_flat.tether_points[2*sorted_ix], ")"
+    #     )
+    #     println("---")
+    # end
+
+
+    # #DEBUG
+    # if agent_type == "LptD" && is_tethered
+    #     println("Found a tethered LptD agent at sorted ix $sorted_ix")
+    # end
+
+
+
     #if inserting or nascent, get the substrate/inserting ix so we can ignore it in attraction/repulsion force calculations
     if is_inserting==1
         sorted_substrate_inserting_ix = system_flat.nascent_to_substrate_ixs[nascent_ix]
@@ -346,6 +376,14 @@ function compute_next_position(sorted_ix::Int, system_flat::AllAgentsFlat, grid_
         end
         if shortest_distance(next_pos, tether_pos, grid_size.dims)>tether_length
             #make next position same as old position
+            
+            # #DEBUG
+            # old_pos = SVector{2, Float64}(system_flat.positions[2*sorted_ix-1], system_flat.positions[2*sorted_ix])
+            # println("Tethered agent of type '$agent_type' exceeded tether length. Old pos: $old_pos, proposed pos: $next_pos, tether pos: $tether_pos")
+            # println("Distance to tether: $(shortest_distance(old_pos, tether_pos, grid_size.dims)), proposed distance to tether: $(shortest_distance(next_pos, tether_pos, grid_size.dims)), tether length: $tether_length")
+            # println("---")
+
+            
             next_pos = SVector{2, Float64}(system_flat.positions[2*sorted_ix-1], system_flat.positions[2*sorted_ix])
         else
             #if proposal position is valid, update aggregated distance
