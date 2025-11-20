@@ -304,7 +304,7 @@ function update_flat_data_nascent_agents!(agents::AllAgents, system_flat::AllAge
         inserting_agent_index = nascent_LPS.inserting_agent_index
         inserting_agent_sorted_ix = system_flat.agent_ix_to_sorted_ix[inserting_agent_index]
         system_flat.identifiers[inserting_agent_sorted_ix] = make_identifier(;
-            is_tethered=false, 
+            is_tethered=true, 
             agent_type="LptD", 
             is_inserting=true, 
             is_nascent=false,
@@ -432,6 +432,16 @@ function update_Lpt_subsystem!(agents::AllAgents, grid_size::GridSize, system_fl
                                 nascent_LPS.arrival_time
                             )
                             push!(agents.LPS, new_LPS)
+
+                            #update its identifier
+                            sorted_ix = system_flat.agent_ix_to_sorted_ix[nascent_LPS.index]
+                            system_flat.identifiers[sorted_ix] = make_identifier(;
+                                is_tethered=false, 
+                                agent_type="LPS", 
+                                is_inserting=false, 
+                                is_nascent=false,
+                                nascent_ix=0
+                            )
 
                             #update the LptD as well
                             LptD.insertion_state = "free"
