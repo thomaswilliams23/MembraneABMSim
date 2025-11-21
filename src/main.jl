@@ -10,6 +10,7 @@ function run_sim(config_pathname::String)
 
     #parse the config and add a copy to the output directory
     params = parse_config(config_pathname)
+    check_params(params)
     copy_config_to_output_dir(config_pathname, params.system.output_dir)
 
     #if specified, set the random seed
@@ -37,7 +38,6 @@ function run_sim(config_pathname::String)
     effective_rad_incs, ideal_dist_incs = compute_nascent_incs(params)
 
     #intialise the system
-    t=0.0
     if device=="cpu"
         (
             agents, 
@@ -63,27 +63,18 @@ function run_sim(config_pathname::String)
 
 
     #write out initial state
-    time_ix = 0
-    write_system_state(agents, grid_size.dims, params.system.output_dir, time_ix)
-
-
-
-    # #DEBUG
-    # println("About to run simulation")
-    # for LptD in agents.OMP.LptD
-    #     if LptD.is_tethered
-    #         sorted_ix = system_flat_cpu.agent_ix_to_sorted_ix[LptD.index]
-    #         identifier = system_flat_cpu.identifiers[sorted_ix]
-    #         println("LptD agent $(sorted_ix) is tethered at start of sim with identifier $identifier")
-    #     end
-    # end
+    output_ix = 0
+    write_system_state(agents, grid_size.dims, params.system.output_dir, output_ix)
 
 
     #main loop
     steps_since_grid_sync = 0
     MAX_STEPS_BETWEEN_GRID_SYNC = 100 #temporary
-    time_err = 0.1*params.system.dt
-    while t<params.system.t_max - time_err
+    max_time_ix = round(Int, params.system.t_max/params.system.dt)
+    output_ix_interval = round(Int, params.system.vis_dt/params.system.dt)
+    for time_ix in 0:max_time_ix
+
+        t = time_ix * params.system.dt
 
         #update BAM subsystem
         update_BAM_subsystem!(agents, grid_size, grid, system_flat_cpu, params, t)
@@ -184,13 +175,10 @@ function run_sim(config_pathname::String)
             end
         end
 
-        #step time
-        t += params.system.dt
-
         #optionally write out data
-        if abs(t/params.system.vis_dt - round(t/params.system.vis_dt))<time_err
-            time_ix = round(Int, t/params.system.vis_dt)
-            write_system_state(agents, grid_size.dims, params.system.output_dir, time_ix)
+        if mod(time_ix, output_ix_interval) == 0
+            output_ix = round(Int, time_ix/output_ix_interval)
+            write_system_state(agents, grid_size.dims, params.system.output_dir, output_ix)
 
             @printf "Running: t=%5.2f\r" t
         end

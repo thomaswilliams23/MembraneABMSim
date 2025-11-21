@@ -2,7 +2,7 @@
 
 julia_version = "1.11.7"
 manifest_format = "2.0"
-project_hash = "34132e362f37c6a1872284aa4799cc620fb79ce9"
+project_hash = "accc84932e2de28ed77be3d6c0101e88027e3666"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -1123,6 +1123,11 @@ version = "1.2.0"
 [[deps.Mmap]]
 uuid = "a63ad114-7e13-5084-954f-fe012c677804"
 version = "1.11.0"
+
+[[deps.Morton]]
+git-tree-sha1 = "e5f326a04f85db6d4ba1eb21be923ee02e070c8c"
+uuid = "2a6d852e-3fac-5a38-885c-fe708af2d09e"
+version = "0.1.1"
 
 [[deps.MosaicViews]]
 deps = ["MappedArrays", "OffsetArrays", "PaddedViews", "StackViews"]

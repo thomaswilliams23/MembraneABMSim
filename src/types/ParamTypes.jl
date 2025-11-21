@@ -115,7 +115,6 @@ General simulation parameters, including density, timestep, output settings, and
 struct SystemParams
     density::Float64
     dt::Float64
-    num_sub_timesteps::Int
     t_max::Float64
     vis_dt::Float64
     output_dir::String

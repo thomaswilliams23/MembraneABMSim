@@ -63,7 +63,6 @@
     "system": {
         "density": 0.9,
         "dt": 0.001,
-        "num_sub_timesteps": 10,
         "t_max": 20,
         "vis_dt": 0.1,
         "output_dir": "BUGFIX_metal_tiny",
