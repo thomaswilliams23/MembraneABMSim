@@ -55,7 +55,7 @@
         "mu_attr_OMP_LPS": 0.025,
         "mu_attr_LPS_LPS": 0.5,
         "rho": 0.9,
-        "max_repulsion": -0.08,
+        "max_repulsion": -0.10,
         "k_C": 0.5,
         "eta": 1,
         "sensing_radius": 0.1

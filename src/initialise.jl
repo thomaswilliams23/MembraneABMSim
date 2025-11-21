@@ -532,3 +532,40 @@ function assemble_all_agents!(agents::AllAgents, system_flat::AllAgentsFlat)
         system_flat.identifiers[sorted_ix] = -abs(system_flat.identifiers[sorted_ix])
     end
 end
+
+
+
+
+"""
+    check_params(params::AllParams)
+
+Checks the numerical stability of the parameters provided.
+"""
+function check_params(params::AllParams)
+
+    max_OMP_radius = max(params.OmpA.radius, params.OmpCF.radius, params.LptD.radius, params.BamA.radius)
+
+
+    #check if attraction is too strong relative to maximum repulsion
+    MAX_ATTR_TO_REP_RATIO = 0.3
+
+    #LPS-LPS
+    max_LPS_LPS_attraction = (params.force.mu_attr_LPS_LPS * 2*params.LPS.radius) / (params.force.k_C * exp(1))
+    if max_LPS_LPS_attraction / abs(params.force.max_repulsion) > MAX_ATTR_TO_REP_RATIO
+        @warn "LPS-LPS attraction strength may be too high relative to maximum repulsion and may result in overlaps. Consider increasing max repulsion and decreasing the time step."
+    end
+
+    #OMP-LPS
+    max_OMP_LPS_attraction = (params.force.mu_attr_OMP_LPS * (max_OMP_radius + params.LPS.radius)) / (params.force.k_C * exp(1))
+    if max_OMP_LPS_attraction / abs(params.force.max_repulsion) > MAX_ATTR_TO_REP_RATIO
+        @warn "OMP-LPS attraction strength may be too high relative to maximum repulsion and may result in overlaps. Consider increasing max repulsion and decreasing the time step."
+    end
+
+    #OMP-OMP
+    max_OMP_OMP_attraction = (params.force.mu_attr_OMP_OMP * 2*max_OMP_radius) / (params.force.k_C * exp(1))
+    if max_OMP_OMP_attraction / abs(params.force.max_repulsion) > MAX_ATTR_TO_REP_RATIO
+        @warn "OMP-OMP attraction strength may be too high relative to maximum repulsion and may result in overlaps. Consider increasing max repulsion and decreasing the time step."
+    end
+
+
+end

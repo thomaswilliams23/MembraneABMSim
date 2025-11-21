@@ -10,6 +10,7 @@ function run_sim(config_pathname::String)
 
     #parse the config and add a copy to the output directory
     params = parse_config(config_pathname)
+    check_params(params)
     copy_config_to_output_dir(config_pathname, params.system.output_dir)
 
     #if specified, set the random seed
