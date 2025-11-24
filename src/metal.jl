@@ -582,6 +582,8 @@ Metal GPU kernel for computing next agent positions based on forces.
             substrate_inserting_ideal_dists[nascent_ix],
             params_metal.insertion_mu_attr,
             params_metal.insertion_mu_rep,
+            params_metal.max_repulsion,
+            params_metal.rho,
             params_metal.insertion_k_C
         )
     end
@@ -837,7 +839,8 @@ Compute the force between an inserting agent and the substrate agent it is inser
 """
 @inline function compute_inserting_substrate_force_metal(agent_pos::SVector{2, Float32}, neighbour_pos::SVector{2, Float32},
                                            dims::SVector{2, Float32}, ideal_dist::Float32, 
-                                           mu_attr::Float32, mu_rep::Float32, k_C::Float32) :: SVector{2, Float32}
+                                           mu_attr::Float32, mu_rep::Float32, max_repulsion::Float32,
+                                           rho::Float32, k_C::Float32) :: SVector{2, Float32}
 
     #handle case where ideal distance is zero or very small
     ideal_dist_eps = Float32(1e-8)
@@ -855,16 +858,22 @@ Compute the force between an inserting agent and the substrate agent it is inser
         return SVector{2, Float32}(0.0, 0.0)
     end
 
-    #agents too close
-    if dist<ideal_dist
-        force_mag = mu_rep * ideal_dist * log(dist/ideal_dist)
-    #agents too far
+    #repulsion
+    force_mag=0.0f0
+    if dist<=rho*ideal_dist
+        force_mag = max_repulsion
+    elseif dist<ideal_dist && dist>rho*ideal_dist
+        force_mag = mu_rep*ideal_dist*log((dist-rho*ideal_dist)/(1.0f0-rho)*ideal_dist)
+        if force_mag < max_repulsion
+            force_mag = max_repulsion
+        end
+    #attraction
     else
-        norm_dist = (dist - ideal_dist)/ideal_dist_eps
-        force_mag = mu_attr * ideal_dist * norm_dist * exp(-k_C * norm_dist)
+        norm_dist = (dist - ideal_dist)/((1.0f0-rho)*ideal_dist)
+        force_mag = mu_attr*ideal_dist*norm_dist*exp(-k_C*norm_dist)
     end
-
     force = (force_mag/dist)*force_vec
+    
     return force
 
 end

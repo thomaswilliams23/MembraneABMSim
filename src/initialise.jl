@@ -415,7 +415,7 @@ function compute_nascent_incs(params::AllParams)
     )
 
     #helper
-    function _compute_insertion_incs_this_agent_type(agent_type::String)
+    function _compute_insertion_incs_this_OMP_type(agent_type::String)
         final_rad = agent_type_to_rad[agent_type]
         final_dist = params.BamA.radius + final_rad
         if final_rad>params.BamA.radius
@@ -425,7 +425,6 @@ function compute_nascent_incs(params::AllParams)
             init_rad = final_rad
             init_dist = params.BamA.radius - final_rad
         end
-        init_rad = min(params.BamA.radius, final_rad)
         insertion_time = final_rad/params.insertion.OMP_assembly_rate
         effective_rad_inc = (params.system.dt/insertion_time)*(final_rad - init_rad)
         ideal_dist_inc = (params.system.dt/insertion_time)*(final_dist - init_dist)
@@ -433,8 +432,20 @@ function compute_nascent_incs(params::AllParams)
     end
 
     #compute increments for each agent type
-    for (i, agent_type) in enumerate(keys(agent_type_to_num))
-        (effective_rad_incs[i], ideal_dist_incs[i]) = _compute_insertion_incs_this_agent_type(agent_type)
+    for agent_type in keys(agent_type_to_num)
+        #OMP
+        if agent_type != "LPS"
+            agent_type_num = agent_type_to_num[agent_type]
+            (effective_rad_incs[agent_type_num], ideal_dist_incs[agent_type_num]) = _compute_insertion_incs_this_OMP_type(agent_type)
+            continue
+        end
+        #LPS
+        agent_type_num = 2
+        final_dist = params.LptD.radius + params.LPS.radius
+        init_dist = params.LptD.radius - params.LPS.radius
+        insertion_time = params.LPS.insertion_time
+        effective_rad_incs[agent_type_num] = 0.0  #LPS does not change size during insertion
+        ideal_dist_incs[agent_type_num] = (params.system.dt/insertion_time)*(final_dist - init_dist)
     end
 
     return (
