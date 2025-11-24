@@ -8,12 +8,6 @@ default, on the GPU as an option.
 """
 function resolve_forces_cpu!(agents::AllAgents, grid_size::GridSize, grid::SimGrid, system_flat::AllAgentsFlat, params::AllParams)
 
-
-    # #DEBUG
-    # println("Starting a new round of force resolution")
-    # println("--------------------------------------")
-
-
     #compute the max aggregate distance since last grid sync
     max_agg_dist = maximum(system_flat.agg_dist_since_grid_sync)
     
