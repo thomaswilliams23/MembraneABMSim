@@ -276,30 +276,6 @@ function compute_next_position(sorted_ix::Int, system_flat::AllAgentsFlat, grid_
 
     is_tethered, agent_type, is_nascent, is_inserting, nascent_ix = parse_identifier(identifier)
 
-
-
-    # #DEBUG
-    # if sorted_ix == 16
-    #     println("Computing next position for agent $sorted_ix of type $agent_type (is_tethered=$is_tethered, is_nascent=$is_nascent, is_inserting=$is_inserting, nascent_ix=$nascent_ix)")
-    #     println("Agent position is (",
-    #         system_flat.positions[2*sorted_ix-1], ", ",
-    #         system_flat.positions[2*sorted_ix], ")"
-    #     )
-    #     println("Tether position is (",
-    #         system_flat.tether_points[2*sorted_ix-1], ", ",
-    #         system_flat.tether_points[2*sorted_ix], ")"
-    #     )
-    #     println("---")
-    # end
-
-
-    # #DEBUG
-    # if agent_type == "LptD" && is_tethered
-    #     println("Found a tethered LptD agent at sorted ix $sorted_ix")
-    # end
-
-
-
     #if inserting or nascent, get the substrate/inserting ix so we can ignore it in attraction/repulsion force calculations
     if is_inserting==1
         sorted_substrate_inserting_ix = system_flat.nascent_to_substrate_ixs[nascent_ix]
@@ -329,6 +305,8 @@ function compute_next_position(sorted_ix::Int, system_flat::AllAgentsFlat, grid_
             system_flat.substrate_inserting_ideal_dists[nascent_ix],
             params.insertion.mu_attr,
             params.insertion.mu_rep,
+            params.force.max_repulsion,
+            params.force.rho,
             params.insertion.k_C
         )
     end
@@ -370,14 +348,6 @@ function compute_next_position(sorted_ix::Int, system_flat::AllAgentsFlat, grid_
         end
         if shortest_distance(next_pos, tether_pos, grid_size.dims)>tether_length
             #make next position same as old position
-            
-            # #DEBUG
-            # old_pos = SVector{2, Float64}(system_flat.positions[2*sorted_ix-1], system_flat.positions[2*sorted_ix])
-            # println("Tethered agent of type '$agent_type' exceeded tether length. Old pos: $old_pos, proposed pos: $next_pos, tether pos: $tether_pos")
-            # println("Distance to tether: $(shortest_distance(old_pos, tether_pos, grid_size.dims)), proposed distance to tether: $(shortest_distance(next_pos, tether_pos, grid_size.dims)), tether length: $tether_length")
-            # println("---")
-
-            
             next_pos = SVector{2, Float64}(system_flat.positions[2*sorted_ix-1], system_flat.positions[2*sorted_ix])
         else
             #if proposal position is valid, update aggregated distance
@@ -544,7 +514,8 @@ Computes the force between an inserting agent and its substrate agent as a 2-ele
 """
 function compute_inserting_substrate_force(agent_pos::SVector{2, Float64}, neighbour_pos::SVector{2, Float64},
                                            dims::SVector{2, Float64}, ideal_dist::Float64, 
-                                           mu_attr::Float64, mu_rep::Float64, k_C::Float64) :: SVector{2, Float64}
+                                           mu_attr::Float64, mu_rep::Float64, max_repulsion::Float64, 
+                                           rho::Float64, k_C::Float64) :: SVector{2, Float64}
     
     #handle case where ideal distance is zero or very small
     ideal_dist_eps = 1e-8
@@ -562,16 +533,22 @@ function compute_inserting_substrate_force(agent_pos::SVector{2, Float64}, neigh
         return SVector{2, Float64}(0.0, 0.0)
     end
 
-    #agents too close
-    if dist<ideal_dist
-        force_mag = mu_rep * ideal_dist * log(dist/ideal_dist)
-    #agents too far
+    #repulsion
+    force_mag=0
+    if dist<=rho*ideal_dist
+        force_mag = max_repulsion
+    elseif dist<ideal_dist && dist>rho*ideal_dist
+        force_mag = mu_rep*ideal_dist*log((dist-rho*ideal_dist)/(1.0-rho)*ideal_dist)
+        if force_mag < max_repulsion
+            force_mag = max_repulsion
+        end
+    #attraction
     else
-        norm_dist = (dist - ideal_dist)/ideal_dist_eps
-        force_mag = mu_attr * ideal_dist * norm_dist * exp(-k_C * norm_dist)
+        norm_dist = (dist - ideal_dist)/((1.0-rho)*ideal_dist)
+        force_mag = mu_attr*ideal_dist*norm_dist*exp(-k_C*norm_dist)
     end
-
     force = (force_mag/dist)*force_vec
+
     return force
 
 end

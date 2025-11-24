@@ -37,6 +37,7 @@ function run_sim(config_pathname::String)
     nascent_added_area_lookup = build_nascent_added_area_lookup(params)
     effective_rad_incs, ideal_dist_incs = compute_nascent_incs(params)
 
+
     #intialise the system
     if device=="cpu"
         (
@@ -184,7 +185,7 @@ function run_sim(config_pathname::String)
         end
     end
 
-    println("Simulation complete.")
+    println("\nSimulation complete.")
     return
 end
 
