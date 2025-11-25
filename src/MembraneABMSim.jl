@@ -30,7 +30,7 @@ module MembraneABMSim
     include("metal/initialise_metal.jl")
     include("metal/other_position_updates_metal.jl")
     include("metal/utils_metal.jl")
-    
+
     include("biology.jl")
     include("initialise.jl")
     include("file_io.jl")
