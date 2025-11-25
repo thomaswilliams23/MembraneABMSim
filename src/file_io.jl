@@ -76,26 +76,33 @@ end
 
 
 """
-    set_up_output_directory(out_dir_path::String)
+    set_up_output_directory(out_dir_path::String; clear_existing_output::Bool=false)
 
 Sets up the specified output directory and optionally clears it if there is already data present.
 """
-function set_up_output_directory(out_dir_path::String)
+function set_up_output_directory(out_dir_path::String; clear_existing_output::Bool=false)
     raw_data_dir = joinpath("out", out_dir_path, "raw_data")
     if isdir(raw_data_dir)
         if !isempty(readdir(raw_data_dir))
-            println("CAUTION: there is already data in the output directory, $raw_data_dir. Do you want to delete this? (y/n)")
-            wipe_dir_yn = readline()
-            while !(wipe_dir_yn in ["y", "n"])
-                println("Please enter 'y' or 'n'")
-                wipe_dir_yn = readline()
-            end
-            if wipe_dir_yn == "y"
-                println("Wiping output directory...")
+            if clear_existing_output
+                println("Wiping existing output directory: $raw_data_dir")
                 rm(raw_data_dir; force=true, recursive=true)
                 mkpath(raw_data_dir)
+                return
             else
-                error("Clear or change the output directory before running the simulation.")
+                println("CAUTION: there is already data in the output directory, $raw_data_dir. Do you want to delete this? (y/n)")
+                wipe_dir_yn = readline()
+                while !(wipe_dir_yn in ["y", "n"])
+                    println("Please enter 'y' or 'n'")
+                    wipe_dir_yn = readline()
+                end
+                if wipe_dir_yn == "y"
+                    println("Wiping output directory...")
+                    rm(raw_data_dir; force=true, recursive=true)
+                    mkpath(raw_data_dir)
+                else
+                    error("Clear or change the output directory before running the simulation.")
+                end
             end
         end
     else

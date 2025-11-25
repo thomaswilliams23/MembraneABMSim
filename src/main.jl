@@ -6,7 +6,7 @@
 Main driver function. Given the path of a config JSON file, parses the config, then runs a 
 simulation according to the settings given in the config.
 """
-function run_sim(config_pathname::String)
+function run_sim(config_pathname::String; clear_existing_output::Bool=false)
 
     #parse the config and add a copy to the output directory
     params = parse_config(config_pathname)
@@ -45,7 +45,7 @@ function run_sim(config_pathname::String)
             grid_size, 
             grid, 
             system_flat_cpu
-        ) = initialise_system_cpu(params)
+        ) = initialise_system_cpu(params; clear_existing_output=clear_existing_output)
     elseif device=="metal"
         (
             non_force_position_kernel,
@@ -57,7 +57,7 @@ function run_sim(config_pathname::String)
             all_data_metal, 
             grid_size_metal, 
             params_metal
-        ) = initialise_system_metal(params)
+        ) = initialise_system_metal(params; clear_existing_output=clear_existing_output)
         effective_rad_incs_metal = Float32.(effective_rad_incs)
         ideal_dist_incs_metal = Float32.(ideal_dist_incs)
     end

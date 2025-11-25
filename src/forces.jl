@@ -599,21 +599,30 @@ function compute_diffusion!(agents::AllAgents, system_flat::AllAgentsFlat, grid_
             end
         end
         OmpA.position = proposal_dest
+        #put in flat structure too
         sorted_ix = system_flat.agent_ix_to_sorted_ix[OmpA.index]
+        system_flat.positions[2*sorted_ix-1] = OmpA.position[1]
+        system_flat.positions[2*sorted_ix] = OmpA.position[2]
         system_flat.agg_dist_since_grid_sync[sorted_ix] += norm(displacement)
     end
     for OmpCF in agents.OMP.OmpCF
         displacement = rand(OmpCF_displacement_dist)
         proposal_dest = mod.(OmpCF.position + displacement, grid_size.dims)
         OmpCF.position = proposal_dest
+        #put in flat structure too
         sorted_ix = system_flat.agent_ix_to_sorted_ix[OmpCF.index]
+        system_flat.positions[2*sorted_ix-1] = OmpCF.position[1]
+        system_flat.positions[2*sorted_ix] = OmpCF.position[2]
         system_flat.agg_dist_since_grid_sync[sorted_ix] += norm(displacement)
     end
     for BamA in agents.OMP.BamA
         displacement = rand(BamA_displacement_dist)
         proposal_dest = mod.(BamA.position + displacement, grid_size.dims)
         BamA.position = proposal_dest
+        #put in flat structure too
         sorted_ix = system_flat.agent_ix_to_sorted_ix[BamA.index]
+        system_flat.positions[2*sorted_ix-1] = BamA.position[1]
+        system_flat.positions[2*sorted_ix] = BamA.position[2]
         system_flat.agg_dist_since_grid_sync[sorted_ix] += norm(displacement)
     end
     for LptD in agents.OMP.LptD
@@ -625,14 +634,20 @@ function compute_diffusion!(agents::AllAgents, system_flat::AllAgentsFlat, grid_
             end
         end
         LptD.position = proposal_dest
+        #put in flat structure too
         sorted_ix = system_flat.agent_ix_to_sorted_ix[LptD.index]
+        system_flat.positions[2*sorted_ix-1] = LptD.position[1]
+        system_flat.positions[2*sorted_ix] = LptD.position[2]
         system_flat.agg_dist_since_grid_sync[sorted_ix] += norm(displacement)
     end
     for LPS in agents.LPS
         displacement = rand(LPS_displacement_dist)
         proposal_dest = mod.(LPS.position + displacement, grid_size.dims)
         LPS.position = proposal_dest
+        #put in flat structure too
         sorted_ix = system_flat.agent_ix_to_sorted_ix[LPS.index]
+        system_flat.positions[2*sorted_ix-1] = LPS.position[1]
+        system_flat.positions[2*sorted_ix] = LPS.position[2]
         system_flat.agg_dist_since_grid_sync[sorted_ix] += norm(displacement)
     end
     for nascent_OMP in agents.nascent.nascent_OMP
@@ -650,6 +665,8 @@ function compute_diffusion!(agents::AllAgents, system_flat::AllAgentsFlat, grid_
         proposal_dest = mod.(nascent_OMP.position + displacement, grid_size.dims)
         nascent_OMP.position = proposal_dest
         sorted_ix = system_flat.agent_ix_to_sorted_ix[nascent_OMP.index]
+        system_flat.positions[2*sorted_ix-1] = nascent_OMP.position[1]
+        system_flat.positions[2*sorted_ix] = nascent_OMP.position[2]
         system_flat.agg_dist_since_grid_sync[sorted_ix] += norm(displacement)
     end
     for nascent_LPS in agents.nascent.nascent_LPS
@@ -657,6 +674,8 @@ function compute_diffusion!(agents::AllAgents, system_flat::AllAgentsFlat, grid_
         proposal_dest = mod.(nascent_LPS.position + displacement, grid_size.dims)
         nascent_LPS.position = proposal_dest
         sorted_ix = system_flat.agent_ix_to_sorted_ix[nascent_LPS.index]
+        system_flat.positions[2*sorted_ix-1] = nascent_LPS.position[1]
+        system_flat.positions[2*sorted_ix] = nascent_LPS.position[2]
         system_flat.agg_dist_since_grid_sync[sorted_ix] += norm(displacement)
     end
 end

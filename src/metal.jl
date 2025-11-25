@@ -1,17 +1,17 @@
 """
-    initialise_system_metal(params::AllParams)
+    initialise_system_metal(params::AllParams; clear_existing_output::Bool=false)
 
 Initialises the simulation system using the Metal GPU backend. Includes additional data 
 structures necessary for running the simulation with a GPU.
 """
-function initialise_system_metal(params::AllParams)
+function initialise_system_metal(params::AllParams; clear_existing_output::Bool=false)
 
     #build the kernels
     non_force_position_kernel = _non_force_position_kernel!(MetalBackend())
     force_kernel = _force_kernel!(MetalBackend())
 
     # set up output directory structure
-    set_up_output_directory(params.system.output_dir)
+    set_up_output_directory(params.system.output_dir; clear_existing_output=clear_existing_output)
 
     # decide which initialisation to use
     if params.init.method == "random"

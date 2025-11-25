@@ -2,7 +2,7 @@
 
 
 """
-    initialise_system(params::AllParams)
+    initialise_system(params::AllParams; clear_existing_output::Bool=false)
 
 Initialises a simulation based on the parameter structure passed in. Depending on the initialisation
 type specified in the parameter structure, calls a helper function to assemble the system.
@@ -16,10 +16,10 @@ Output:
 )
 
 """
-function initialise_system_cpu(params::AllParams)
+function initialise_system_cpu(params::AllParams; clear_existing_output::Bool=false)
 
     # set up output directory structure
-    set_up_output_directory(params.system.output_dir)
+    set_up_output_directory(params.system.output_dir; clear_existing_output=clear_existing_output)
 
     # decide which initialisation to use
     if params.init.method == "random"
