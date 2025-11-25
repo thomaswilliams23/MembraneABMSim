@@ -228,12 +228,75 @@ end
 
 
 """
-    make_membrane_movie(out_path::String)
+    centre_all_agents!(agents::AllAgents, agent_type::String, agent_index::Int, dims::SVector{2, Float64})
+
+Centers all agents in the system around a specific agent, given by `agent_type` and `agent_index` (in the relevant AllAgents vector).
+"""
+function centre_all_agents!(agents::AllAgents, agent_type::String, agent_index::Int, dims::SVector{2, Float64})
+    #find the agent to centre on
+    centre_agent = nothing
+    if agent_type == "OmpA"
+        centre_agent = agents.OMP.OmpA[agent_index]
+    elseif agent_type == "OmpCF"
+        centre_agent = agents.OMP.OmpCF[agent_index]
+    elseif agent_type == "BamA"
+        centre_agent = agents.OMP.BamA[agent_index]
+    elseif agent_type == "LptD"
+        centre_agent = agents.OMP.LptD[agent_index]
+    elseif agent_type == "LPS"
+        centre_agent = agents.LPS[agent_index]
+    else
+        error("Agent type $agent_type not recognised.")
+    end
+
+    #compute shift vector
+    centre_pos = centre_agent.position
+    membrane_centre = dims ./ 2.0
+    shift_vec = membrane_centre - centre_pos
+
+    #shift all agents
+    for OmpA in agents.OMP.OmpA
+        OmpA.position += shift_vec
+    end
+    for OmpCF in agents.OMP.OmpCF
+        OmpCF.position += shift_vec
+    end
+    for BamA in agents.OMP.BamA
+        BamA.position += shift_vec
+    end
+    for LptD in agents.OMP.LptD
+        LptD.position += shift_vec
+    end
+    for LPS in agents.LPS
+        LPS.position += shift_vec
+    end
+    for nascent_LPS in agents.nascent.nascent_LPS
+        nascent_LPS.position += shift_vec
+    end
+    for nascent_OMP in agents.nascent.nascent_OMP
+        nascent_OMP.position += shift_vec
+    end
+
+end
+
+
+
+
+
+"""
+    make_membrane_movie(out_path::String; fps::Int=24, centering::Union{Tuple{String, Int}, nothing}=nothing)
 
 Given an `out_path` - which must be a directory within the `out` directory - makes a movie
 of the simulation data in `out_path/raw_data`.
+
+Optionally, the frames per second (`fps`) of the movie can be set (default 24). You can also
+specify centering of the movie around a specific agent by providing a tuple `(agent_type::String, agent_index::Int)`.
+Note that the index is the index of the agent in the relevant `AllAgents` vector, not the agent's unique index in 
+the system. This agent must be present at the start of the simulation.
 """
-function make_membrane_movie(out_path::String)
+function make_membrane_movie(out_path::String;
+    fps::Int=24, 
+    centering::Union{Tuple{String, Int}, Nothing}=nothing)
 
     #check that the out_path exists and contains data
     raw_data_dir = joinpath("out", out_path, "raw_data")
@@ -274,7 +337,7 @@ function make_membrane_movie(out_path::String)
     movie_path = joinpath("out", out_path, "sim.mp4")
 
     #loop over each output data file and generate a snapshot for the movie
-    record(fig, movie_path, 0:num_time_steps) do time_ix
+    record(fig, movie_path, 0:num_time_steps; framerate=fps) do time_ix
 
         print("Rendering frame $time_ix of $num_time_steps\r")
         
@@ -282,6 +345,13 @@ function make_membrane_movie(out_path::String)
         time_val = time_ix * params.system.vis_dt
         data_fname = joinpath("out", out_path, "raw_data", "sys_data_$(time_ix).jld2")
         @load data_fname agents dims
+
+
+        #optionally centre everything around a specific agent
+        if !isnothing(centering)
+            centre_all_agents!(agents, centering[1], centering[2], dims)
+        end
+
         
         #get agent representations for this time step
         (
