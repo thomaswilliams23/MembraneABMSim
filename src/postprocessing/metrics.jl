@@ -84,3 +84,57 @@ function get_prop_LPS_bordering_OMP(agents::AllAgents, dims::SVector{2, Float64}
         return num_bordering_LPS / total_LPS
     end
 end
+
+
+
+"""
+    get_LPS_clusters(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+
+Makes a vector of LPS clusters, where each cluster is represented as a vector of agent indices
+(that is, indices within the LPS agent vector, not the actual agent indices).
+"""
+function get_LPS_clusters(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+
+    #define clustering distance
+    CLUSTER_DIST = 2.0 * params.LPS.radius * 1.1 #<- hard-coded, may wish to change
+
+    #keep track of which agents have been assigned to a cluster
+    num_LPS = length(agents.LPS)
+    assigned_yn = falses(num_LPS)
+
+    clusters = Vector{Vector{Int}}()
+
+    for i in 1:num_LPS
+        if assigned_yn[i]
+            continue
+        end
+
+        #start a new cluster
+        new_cluster = [i]
+        assigned_yn[i] = true
+
+        #find all LPS connected to this one
+        to_check = [i]
+        while !isempty(to_check)
+            current_ix = pop!(to_check)
+            current_agent = agents.LPS[current_ix]
+
+            for j in 1:num_LPS
+                if assigned_yn[j]
+                    continue
+                end
+                other_agent = agents.LPS[j]
+                dist = shortest_distance(current_agent.position, other_agent.position, dims)
+                if dist < CLUSTER_DIST
+                    push!(new_cluster, j)
+                    assigned_yn[j] = true
+                    push!(to_check, j)
+                end
+            end
+        end
+
+        push!(clusters, new_cluster)
+    end
+
+    return clusters
+end
