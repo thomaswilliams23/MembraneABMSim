@@ -31,13 +31,15 @@ module MembraneABMSim
     include("metal/other_position_updates_metal.jl")
     include("metal/utils_metal.jl")
 
+    include("postprocessing/postprocessing_utils.jl")
+    include("postprocessing/metrics.jl")
+
     include("biology.jl")
     include("initialise.jl")
     include("file_io.jl")
     include("forces.jl")
     include("main.jl")
     include("nascent.jl")
-    include("postprocessing.jl")
     include("sweep.jl")
     include("update_grid.jl")
     include("utils.jl")
