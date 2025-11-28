@@ -138,3 +138,152 @@ function get_LPS_clusters(agents::AllAgents, dims::SVector{2, Float64}, params::
 
     return clusters
 end
+
+
+"""
+    get_domain_coverage(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+
+Computes the coverage of the domain by all agents (as a propostion of area). Does so by generating a grid
+over the domain and checking which grid points are within the (effective) radius of any agent.
+"""
+function get_domain_coverage(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+    #define grid resolution
+    GRID_RES = 0.01 #<- hard-coded, may wish to change
+
+    #number of grid points in each dimension
+    num_x_pts = round(Int, dims[1] / GRID_RES)
+    num_y_pts = round(Int, dims[2] / GRID_RES)
+
+    #generate grid points
+    x_pts = range(0, stop=dims[1], length=num_x_pts)
+    y_pts = range(0, stop=dims[2], length=num_y_pts)
+
+    #keep track of covered points
+    covered_yn = falses(num_x_pts, num_y_pts)
+
+    #check each grid point against all agents
+    for ix in 1:num_x_pts
+        for iy in 1:num_y_pts
+            grid_point = SVector{2, Float64}(x_pts[ix], y_pts[iy])
+            for OmpA in agents.OMP.OmpA
+                dist = shortest_distance(grid_point, OmpA.position, dims)
+                if dist < params.OmpA.radius
+                    covered_yn[ix, iy] = true
+                    break
+                end
+            end
+            if covered_yn[ix, iy]
+                continue
+            end
+            for OmpCF in agents.OMP.OmpCF
+                dist = shortest_distance(grid_point, OmpCF.position, dims)
+                if dist < params.OmpCF.radius
+                    covered_yn[ix, iy] = true
+                    break
+                end
+            end
+            if covered_yn[ix, iy]
+                continue
+            end
+            for LptD in agents.OMP.LptD
+                dist = shortest_distance(grid_point, LptD.position, dims)
+                if dist < params.LptD.radius
+                    covered_yn[ix, iy] = true
+                    break
+                end
+            end
+            if covered_yn[ix, iy]
+                continue
+            end
+            for BamA in agents.OMP.BamA
+                dist = shortest_distance(grid_point, BamA.position, dims)
+                if dist < params.BamA.radius
+                    covered_yn[ix, iy] = true
+                    break
+                end
+            end
+            if covered_yn[ix, iy]
+                continue
+            end
+            for LPS in agents.LPS
+                dist = shortest_distance(grid_point, LPS.position, dims)
+                if dist < params.LPS.radius
+                    covered_yn[ix, iy] = true
+                    break
+                end
+            end
+            if covered_yn[ix, iy]
+                continue
+            end
+            for nascent_OMP in agents.nascent.nascent_OMP
+                dist = shortest_distance(grid_point, nascent_OMP.position, dims)
+                if dist < nascent_OMP.effective_radius
+                    covered_yn[ix, iy] = true
+                    break
+                end
+            end
+            if covered_yn[ix, iy]
+                continue
+            end
+            for nascent_LPS in agents.nascent.nascent_LPS
+                dist = shortest_distance(grid_point, nascent_LPS.position, dims)
+                if dist < params.LPS.radius
+                    covered_yn[ix, iy] = true
+                    break
+                end
+            end
+            if covered_yn[ix, iy]
+                continue
+            end
+        end
+    end
+
+    #compute coverage proportion
+    num_covered_pts = count(covered_yn)
+    total_pts = num_x_pts * num_y_pts
+
+    return num_covered_pts / total_pts
+end
+
+
+"""
+    get_ideal_domain_coverage(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+
+Computes the ideal coverage of the domain by all agents (as a propostion of area), assuming no overlaps.
+"""
+function get_ideal_domain_coverage(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+    # Calculate total area of all agents
+    total_agent_area = 0.0
+
+    # Add area of all OMP agents
+    for OmpA in agents.OMP.OmpA
+        total_agent_area += π * params.OmpA.radius^2
+    end
+    for OmpCF in agents.OMP.OmpCF
+        total_agent_area += π * params.OmpCF.radius^2
+    end
+    for LptD in agents.OMP.LptD
+        total_agent_area += π * params.LptD.radius^2
+    end
+    for BamA in agents.OMP.BamA
+        total_agent_area += π * params.BamA.radius^2
+    end
+
+    # Add area of LPS agents
+    for LPS in agents.LPS
+        total_agent_area += π * params.LPS.radius^2
+    end
+
+    # Add area of nascent agents
+    for nascent_OMP in agents.nascent.nascent_OMP
+        total_agent_area += π * nascent_OMP.effective_radius^2
+    end
+    for nascent_LPS in agents.nascent.nascent_LPS
+        total_agent_area += π * params.LPS.radius^2
+    end
+
+    # Calculate domain area
+    domain_area = dims[1] * dims[2]
+
+    return total_agent_area / domain_area
+end
