@@ -34,102 +34,14 @@ end
 
 
 """
-    get_membrane_size(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
-
-Computes the size of the membrane (product of dims).
-"""
-function get_membrane_size(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
-    return dims[1] * dims[2]
-end
-
-
-
-"""
-    get_num_LPS_bordering_OMP(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
-
-Counts the number of LPS agents that are bordering any OMP agents.
-"""
-function get_num_LPS_bordering_OMP(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
-
-    #define bordering distance
-    NEIGH_DIST = params.LPS.radius #<- hard-coded, may wish to change
-
-    #count LPS near OMPs
-    num_bordering_LPS = 0
-    for LPS in agents.LPS
-        borders_OMP = false
-        for OmpA in agents.OMP.OmpA
-            dist = shortest_distance(LPS.position, OmpA.position, dims)
-            if dist < params.LPS.radius + params.OmpA.radius + NEIGH_DIST
-                num_bordering_LPS += 1
-                borders_OMP = true
-                break
-            end
-        end
-        if borders_OMP #<- skip to next LPS if already found bordering OMP
-            continue
-        end
-        for OmpCF in agents.OMP.OmpCF
-            dist = shortest_distance(LPS.position, OmpCF.position, dims)
-            if dist < params.LPS.radius + params.OmpCF.radius + NEIGH_DIST
-                num_bordering_LPS += 1
-                borders_OMP = true
-                break
-            end
-        end
-        if borders_OMP
-            continue
-        end
-        for LptD in agents.OMP.LptD
-            dist = shortest_distance(LPS.position, LptD.position, dims)
-            if dist < params.LPS.radius + params.LptD.radius + NEIGH_DIST
-                num_bordering_LPS += 1
-                borders_OMP = true
-                break
-            end
-        end
-        if borders_OMP
-            continue
-        end
-        for BamA in agents.OMP.BamA
-            dist = shortest_distance(LPS.position, BamA.position, dims)
-            if dist < params.LPS.radius + params.BamA.radius + NEIGH_DIST
-                num_bordering_LPS += 1
-                borders_OMP = true
-                break
-            end
-        end
-    end
-
-    return num_bordering_LPS
-end
-
-
-"""
-    get_prop_LPS_bordering_OMP(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
-
-Computes the proportion of LPS agents that are bordering any OMP agents.
-"""
-function get_prop_LPS_bordering_OMP(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
-    num_bordering_LPS = get_num_LPS_bordering_OMP(agents, dims, params)
-    total_LPS = length(agents.LPS)
-    if total_LPS == 0
-        return 0.0
-    else
-        return num_bordering_LPS / total_LPS
-    end
-end
-
-
-
-"""
     analyse_sim(func::Function, data_name::String, simulation_config_fname::String; get_time_series_yn::Bool=false, evaluate_final_state_yn::Bool=false)
 
 Applies a function `func` to a single simulation specified by `simulation_config`,
 then saves the results to a JLD2 file in the simulation output directory.
 """
 function analyse_sim(func::Function, data_name::String, simulation_config_fname::String;
-                     get_time_series_yn::Bool=false, evaluate_final_state_yn::Bool=false)
+                     get_time_series_yn::Bool=false, evaluate_final_state_yn::Bool=false,
+                     analyse_whole_traj_yn::Bool=false)
 
 
     #@assert !(get_time_series_yn && evaluate_final_state_yn), "Cannot set both get_time_series and evaluate_final_state to true"
@@ -141,8 +53,11 @@ function analyse_sim(func::Function, data_name::String, simulation_config_fname:
 
     # Compute the desired data
     if get_time_series_yn
+        #apply the function to each time point
         result = get_time_series(func, out_path, params_this_sim)
     elseif evaluate_final_state_yn
+        #apply the function only to the final system state
+
         #load in final state
         raw_data_dir = joinpath(out_path, "raw_data")
         max_time_ix = round(Int, params_this_sim.system.t_max / params_this_sim.system.vis_dt)
@@ -151,6 +66,10 @@ function analyse_sim(func::Function, data_name::String, simulation_config_fname:
 
         #apply function
         result = func(agents, dims, params_this_sim)
+    elseif analyse_whole_traj_yn
+        #apply the function to the whole trajectory at once 
+        #(NOTE requires function to have different arguments)
+        result = func(params_this_sim)
     else
         #TODO: implement other analysis types
         error("Only time series and final state evaluation are currently implemented")
@@ -175,7 +94,8 @@ Applies a function `func` to the results of all simulations in a parameter sweep
 then saves the results to a JLD2 file in the sweep output directory.
 """
 function analyse_sweep(func::Function, data_name::String, sweep_config_fname::String;
-                       get_time_series_yn::Bool=false, evaluate_final_state_yn::Bool=false)
+                       get_time_series_yn::Bool=false, evaluate_final_state_yn::Bool=false,
+                       analyse_whole_traj_yn::Bool=false)
 
     @assert !(get_time_series_yn && evaluate_final_state_yn) "Cannot set both get_time_series and evaluate_final_state to true"
 
@@ -186,13 +106,14 @@ function analyse_sweep(func::Function, data_name::String, sweep_config_fname::St
     # Iterate over all parameter combinations
     sim_ix = 0
     num_sims = length(keys(sim_dict))
-    for sim_path in keys(sim_dict)
-
+    Threads.@threads for sim_path in keys(sim_dict)
+    
         sim_config_fname = joinpath("out", sweep_params.output_base_dir, sim_path, "config.json")
 
         analyse_sim(func, data_name, sim_config_fname;
-                     get_time_series_yn=get_time_series_yn, 
-                     evaluate_final_state_yn=evaluate_final_state_yn)
+                    get_time_series_yn=get_time_series_yn, 
+                    evaluate_final_state_yn=evaluate_final_state_yn,
+                    analyse_whole_traj_yn=analyse_whole_traj_yn)
 
         print("Processed sim $sim_ix of $num_sims\r")
 
