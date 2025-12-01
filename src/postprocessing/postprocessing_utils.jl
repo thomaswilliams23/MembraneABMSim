@@ -106,8 +106,8 @@ function analyse_sweep(func::Function, data_name::String, sweep_config_fname::St
     # Iterate over all parameter combinations
     sim_ix = 0
     num_sims = length(keys(sim_dict))
-    for sim_path in keys(sim_dict)
-
+    Threads.@threads for sim_path in keys(sim_dict)
+    
         sim_config_fname = joinpath("out", sweep_params.output_base_dir, sim_path, "config.json")
 
         analyse_sim(func, data_name, sim_config_fname;
