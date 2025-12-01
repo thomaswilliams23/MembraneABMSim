@@ -287,3 +287,35 @@ function get_ideal_domain_coverage(agents::AllAgents, dims::SVector{2, Float64},
 
     return total_agent_area / domain_area
 end
+
+
+
+"""
+    get_cutoff_time(params::AllParams)
+
+Computes the time at which the membrane size plateaus (i.e. no further agents can be inserted).
+"""
+function get_cutoff_time(params::AllParams)
+
+    # get final membrane size
+    out_path = joinpath("out", params.system.output_dir)
+    raw_data_dir = joinpath(out_path, "raw_data")
+    max_time_ix = round(Int, params.system.t_max / params.system.vis_dt)
+    fname_final = joinpath(raw_data_dir, @sprintf("sys_data_%d.jld2", max_time_ix))
+    @load fname_final agents dims
+    final_membrane_size = get_membrane_size(agents, dims, params)
+
+    # iterate backwards through time points to find when membrane size plateaus
+    cutoff_time = params.system.t_max
+    for time_ix in (max_time_ix-1):-1:0
+        fname_this_time_ix = joinpath(raw_data_dir, @sprintf("sys_data_%d.jld2", time_ix))
+        @load fname_this_time_ix agents dims
+        membrane_size_this_time = get_membrane_size(agents, dims, params)
+        if membrane_size_this_time < final_membrane_size
+            cutoff_time = time_ix * params.system.vis_dt
+            break
+        end
+    end
+
+    return cutoff_time
+end

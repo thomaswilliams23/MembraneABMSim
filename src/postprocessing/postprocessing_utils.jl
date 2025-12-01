@@ -40,7 +40,8 @@ Applies a function `func` to a single simulation specified by `simulation_config
 then saves the results to a JLD2 file in the simulation output directory.
 """
 function analyse_sim(func::Function, data_name::String, simulation_config_fname::String;
-                     get_time_series_yn::Bool=false, evaluate_final_state_yn::Bool=false)
+                     get_time_series_yn::Bool=false, evaluate_final_state_yn::Bool=false,
+                     analyse_whole_traj_yn::Bool=false)
 
 
     #@assert !(get_time_series_yn && evaluate_final_state_yn), "Cannot set both get_time_series and evaluate_final_state to true"
@@ -52,8 +53,11 @@ function analyse_sim(func::Function, data_name::String, simulation_config_fname:
 
     # Compute the desired data
     if get_time_series_yn
+        #apply the function to each time point
         result = get_time_series(func, out_path, params_this_sim)
     elseif evaluate_final_state_yn
+        #apply the function only to the final system state
+
         #load in final state
         raw_data_dir = joinpath(out_path, "raw_data")
         max_time_ix = round(Int, params_this_sim.system.t_max / params_this_sim.system.vis_dt)
@@ -62,6 +66,10 @@ function analyse_sim(func::Function, data_name::String, simulation_config_fname:
 
         #apply function
         result = func(agents, dims, params_this_sim)
+    elseif analyse_whole_traj_yn
+        #apply the function to the whole trajectory at once 
+        #(NOTE requires function to have different arguments)
+        result = func(params_this_sim)
     else
         #TODO: implement other analysis types
         error("Only time series and final state evaluation are currently implemented")
@@ -86,7 +94,8 @@ Applies a function `func` to the results of all simulations in a parameter sweep
 then saves the results to a JLD2 file in the sweep output directory.
 """
 function analyse_sweep(func::Function, data_name::String, sweep_config_fname::String;
-                       get_time_series_yn::Bool=false, evaluate_final_state_yn::Bool=false)
+                       get_time_series_yn::Bool=false, evaluate_final_state_yn::Bool=false,
+                       analyse_whole_traj_yn::Bool=false)
 
     @assert !(get_time_series_yn && evaluate_final_state_yn) "Cannot set both get_time_series and evaluate_final_state to true"
 
@@ -102,8 +111,9 @@ function analyse_sweep(func::Function, data_name::String, sweep_config_fname::St
         sim_config_fname = joinpath("out", sweep_params.output_base_dir, sim_path, "config.json")
 
         analyse_sim(func, data_name, sim_config_fname;
-                     get_time_series_yn=get_time_series_yn, 
-                     evaluate_final_state_yn=evaluate_final_state_yn)
+                    get_time_series_yn=get_time_series_yn, 
+                    evaluate_final_state_yn=evaluate_final_state_yn,
+                    analyse_whole_traj_yn=analyse_whole_traj_yn)
 
         print("Processed sim $sim_ix of $num_sims\r")
 
