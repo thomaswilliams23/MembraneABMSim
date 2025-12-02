@@ -5,6 +5,7 @@ module MembraneABMSim
     using Accessors
     using CairoMakie
     using Colors
+    using CUDA
     using Distributions
     using GeometryBasics
     using JLD2
