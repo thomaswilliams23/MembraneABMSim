@@ -26,19 +26,6 @@ end
 
 
 """
-    fast_floor_int32(x::Float32):: Int32
-
-Efficiently computes the floor of a Float32 value and returns it as Int32. GPU-safe.
-"""
-@inline function fast_floor_int32(x::Float32):: Int32
-    i = unsafe_trunc(Int32, x)        # GPU-safe, direct LLVM fptosi
-    i -= (x < Float32(i))             # subtract 1 if x < i (emulates floor)
-    return i
-end
-
-
-
-"""
     parse_identifier_CUDA(identifier::Int)
 
 Parses an agent identifier integer into its constituent properties for CUDA GPU kernels.
