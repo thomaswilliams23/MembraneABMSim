@@ -44,7 +44,7 @@ function analyse_sim(func::Function, data_name::String, simulation_config_fname:
                      analyse_whole_traj_yn::Bool=false)
 
 
-    #@assert !(get_time_series_yn && evaluate_final_state_yn), "Cannot set both get_time_series and evaluate_final_state to true"
+    @assert !(get_time_series_yn && evaluate_final_state_yn) "Cannot set both get_time_series and evaluate_final_state to true"
 
     # Load the simulation configuration
     params_this_sim = parse_config(simulation_config_fname)

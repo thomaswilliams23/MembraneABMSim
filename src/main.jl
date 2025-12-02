@@ -22,11 +22,11 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false)
     #determine device to use
     device = "cpu"
     if params.system.device == "metal"
-        @assert Metal.functional(), "Metal device specified but no Metal-compatible GPU found."
+        @assert Metal.functional() "Metal device specified but no Metal-compatible GPU found."
         println("Running on Metal GPU")
         device = "metal"
     elseif params.system.device == "cuda"
-        @assert CUDA.has_cuda(), "CUDA device specified but no CUDA-compatible GPU found."
+        @assert CUDA.has_cuda() "CUDA device specified but no CUDA-compatible GPU found."
         println("Running on CUDA GPU")
         device = "cuda"
     elseif params.system.device == "cpu"
