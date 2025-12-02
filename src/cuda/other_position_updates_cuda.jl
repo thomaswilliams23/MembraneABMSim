@@ -84,13 +84,13 @@ end
 
 """
     function _non_force_position_kernel!(
-        positions::CuArray{Float32, 1, CUDA.DeviceMemory},
-        next_positions::CuArray{Float32, 1, CUDA.DeviceMemory},
-        effective_radii::CuArray{Float32, 1, CUDA.DeviceMemory},
-        identifiers::CuArray{Int, 1, CUDA.DeviceMemory},
-        tether_points::CuArray{Float32, 1, CUDA.DeviceMemory},
-        substrate_inserting_ideal_dists::CuArray{Float32, 1, CUDA.DeviceMemory},
-        newly_tethered_agent_ixs::CuArray{Int, 1, CUDA.DeviceMemory},
+        positions::CuDeviceVector{Float32, 1, CUDA.DeviceMemory},
+        next_positions::CuDeviceVector{Float32, 1, CUDA.DeviceMemory},
+        effective_radii::CuDeviceVector{Float32, 1, CUDA.DeviceMemory},
+        identifiers::CuDeviceVector{Int, 1, CUDA.DeviceMemory},
+        tether_points::CuDeviceVector{Float32, 1, CUDA.DeviceMemory},
+        substrate_inserting_ideal_dists::CuDeviceVector{Float32, 1, CUDA.DeviceMemory},
+        newly_tethered_agent_ixs::CuDeviceVector{Int, 1, CUDA.DeviceMemory},
         dims::SVector{2, Float32},
         effective_rad_incs::SVector{7, Float32},
         ideal_dist_incs::SVector{7, Float32},
@@ -101,13 +101,13 @@ end
 CUDA GPU kernel for computing non-force position changes.
 """
 @kernel function _non_force_position_kernel_CUDA!(
-    positions::CuArray{Float32, 1, CUDA.DeviceMemory},
-    next_positions::CuArray{Float32, 1, CUDA.DeviceMemory},
-    effective_radii::CuArray{Float32, 1, CUDA.DeviceMemory},
-    identifiers::CuArray{Int, 1, CUDA.DeviceMemory},
-    tether_points::CuArray{Float32, 1, CUDA.DeviceMemory},
-    substrate_inserting_ideal_dists::CuArray{Float32, 1, CUDA.DeviceMemory},
-    newly_tethered_agent_ixs::CuArray{Int, 1, CUDA.DeviceMemory},
+    positions::CuDeviceVector{Float32, 1, CUDA.DeviceMemory},
+    next_positions::CuDeviceVector{Float32, 1, CUDA.DeviceMemory},
+    effective_radii::CuDeviceVector{Float32, 1, CUDA.DeviceMemory},
+    identifiers::CuDeviceVector{Int, 1, CUDA.DeviceMemory},
+    tether_points::CuDeviceVector{Float32, 1, CUDA.DeviceMemory},
+    substrate_inserting_ideal_dists::CuDeviceVector{Float32, 1, CUDA.DeviceMemory},
+    newly_tethered_agent_ixs::CuDeviceVector{Int, 1, CUDA.DeviceMemory},
     dims::SVector{2, Float32},
     effective_rad_incs::SVector{7, Float32},
     ideal_dist_incs::SVector{7, Float32},
