@@ -72,7 +72,7 @@ function initialise_system_random_CUDA(force_kernel, params::AllParams; suppress
 
         if steps_since_grid_sync >= MAX_STEPS_BETWEEN_GRID_SYNC
 
-            copy_data_to_cpu!(system_flat_cpu, agents, all_data_CUDA, grid_size_CUDA)
+            copy_data_to_cpu_from_CUDA!(system_flat_cpu, agents, all_data_CUDA, grid_size_CUDA)
 
             rebuild_grid!(grid_size, grid, agents, params.force.sensing_radius)
             compile_flat_system_data_cpu!(system_flat_cpu, agents, grid_size, grid, params)
@@ -111,7 +111,7 @@ function initialise_system_random_CUDA(force_kernel, params::AllParams; suppress
     
     #now copy across to cpu
     if params.init.equilibration_time > time_err
-        copy_data_to_cpu!(system_flat_cpu, agents, all_data_CUDA, grid_size_CUDA)
+        copy_data_to_cpu_from_CUDA!(system_flat_cpu, agents, all_data_CUDA, grid_size_CUDA)
     else
         #if no equilibration, still need to copy initial positions across
         copyto!(all_data_CUDA.next_positions, all_data_CUDA.positions[1:2*grid_size_CUDA.num_agents])

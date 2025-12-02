@@ -107,9 +107,9 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false)
 
             #if using metal, copy data back to CPU to rebuild grid
             if device=="metal"
-                copy_data_to_cpu!(system_flat_cpu, agents, all_data_metal, grid_size_metal)
+                copy_data_to_cpu_from_metal!(system_flat_cpu, agents, all_data_metal, grid_size_metal)
             elseif device=="cuda"
-                copy_data_to_cpu!(system_flat_cpu, agents, all_data_CUDA, grid_size_CUDA)
+                copy_data_to_cpu_from_CUDA!(system_flat_cpu, agents, all_data_CUDA, grid_size_CUDA)
             end
 
             #rebuild grid and flat data structures
@@ -184,9 +184,9 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false)
 
             #if using metal, copy data back to CPU to rebuild grid
             if device=="metal"
-                copy_data_to_cpu!(system_flat_cpu, agents, all_data_metal, grid_size_metal)
+                copy_data_to_cpu_from_metal!(system_flat_cpu, agents, all_data_metal, grid_size_metal)
             elseif device=="cuda"
-                copy_data_to_cpu!(system_flat_cpu, agents, all_data_CUDA, grid_size_CUDA)
+                copy_data_to_cpu_from_CUDA!(system_flat_cpu, agents, all_data_CUDA, grid_size_CUDA)
             end
 
             #rebuild grid and flat data structures
@@ -215,13 +215,13 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false)
             resolve_forces_metal!(force_kernel, all_data_metal, grid_size_metal, params_metal)
             copy_data_to_cpu = copy_data_to_cpu_yn(agents.OMP.BamA, params, t)
             if copy_data_to_cpu
-                copy_data_to_cpu!(system_flat_cpu, agents, all_data_metal, grid_size_metal)
+                copy_data_to_cpu_from_metal!(system_flat_cpu, agents, all_data_metal, grid_size_metal)
             end
         elseif device=="cuda"
             resolve_forces_CUDA!(force_kernel, all_data_CUDA, grid_size_CUDA, params_CUDA)
             copy_data_to_cpu = copy_data_to_cpu_yn(agents.OMP.BamA, params, t)
             if copy_data_to_cpu
-                copy_data_to_cpu!(system_flat_cpu, agents, all_data_CUDA, grid_size_CUDA)
+                copy_data_to_cpu_from_CUDA!(system_flat_cpu, agents, all_data_CUDA, grid_size_CUDA)
             end
         end
 

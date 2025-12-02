@@ -71,7 +71,7 @@ function initialise_system_random_metal(force_kernel, params::AllParams)
 
         if steps_since_grid_sync >= MAX_STEPS_BETWEEN_GRID_SYNC
 
-            copy_data_to_cpu!(system_flat_cpu, agents, all_data_metal, grid_size_metal)
+            copy_data_to_cpu_from_metal!(system_flat_cpu, agents, all_data_metal, grid_size_metal)
 
             rebuild_grid!(grid_size, grid, agents, params.force.sensing_radius)
             compile_flat_system_data_cpu!(system_flat_cpu, agents, grid_size, grid, params)
@@ -106,7 +106,7 @@ function initialise_system_random_metal(force_kernel, params::AllParams)
 
     #now copy across to cpu
     if params.init.equilibration_time > time_err
-        copy_data_to_cpu!(system_flat_cpu, agents, all_data_metal, grid_size_metal)
+        copy_data_to_cpu_from_metal!(system_flat_cpu, agents, all_data_metal, grid_size_metal)
     else
         #if no equilibration, still need to copy initial positions across
         copyto!(all_data_metal.next_positions, all_data_metal.positions[1:2*grid_size_metal.num_agents])
