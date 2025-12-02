@@ -84,13 +84,13 @@ end
 
 """
     function _non_force_position_kernel!(
-        positions::CuDeviceVector{Float32, CUDA.DeviceMemory},
-        next_positions::CuDeviceVector{Float32, CUDA.DeviceMemory},
-        effective_radii::CuDeviceVector{Float32, CUDA.DeviceMemory},
-        identifiers::CuDeviceVector{Int, CUDA.DeviceMemory},
-        tether_points::CuDeviceVector{Float32, CUDA.DeviceMemory},
-        substrate_inserting_ideal_dists::CuDeviceVector{Float32, CUDA.DeviceMemory},
-        newly_tethered_agent_ixs::CuDeviceVector{Int, CUDA.DeviceMemory},
+        positions::CuDeviceVector{Float32},
+        next_positions::CuDeviceVector{Float32},
+        effective_radii::CuDeviceVector{Float32},
+        identifiers::CuDeviceVector{Int},
+        tether_points::CuDeviceVector{Float32},
+        substrate_inserting_ideal_dists::CuDeviceVector{Float32},
+        newly_tethered_agent_ixs::CuDeviceVector{Int},
         dims::SVector{2, Float32},
         effective_rad_incs::SVector{7, Float32},
         ideal_dist_incs::SVector{7, Float32},
@@ -101,13 +101,13 @@ end
 CUDA GPU kernel for computing non-force position changes.
 """
 @kernel function _non_force_position_kernel_CUDA!(
-    positions::CuDeviceVector{Float32, CUDA.DeviceMemory},
-    next_positions::CuDeviceVector{Float32, CUDA.DeviceMemory},
-    effective_radii::CuDeviceVector{Float32, CUDA.DeviceMemory},
-    identifiers::CuDeviceVector{Int, CUDA.DeviceMemory},
-    tether_points::CuDeviceVector{Float32, CUDA.DeviceMemory},
-    substrate_inserting_ideal_dists::CuDeviceVector{Float32, CUDA.DeviceMemory},
-    newly_tethered_agent_ixs::CuDeviceVector{Int, CUDA.DeviceMemory},
+    positions::CuDeviceVector{Float32},
+    next_positions::CuDeviceVector{Float32},
+    effective_radii::CuDeviceVector{Float32},
+    identifiers::CuDeviceVector{Int},
+    tether_points::CuDeviceVector{Float32},
+    substrate_inserting_ideal_dists::CuDeviceVector{Float32},
+    newly_tethered_agent_ixs::CuDeviceVector{Int},
     dims::SVector{2, Float32},
     effective_rad_incs::SVector{7, Float32},
     ideal_dist_incs::SVector{7, Float32},
