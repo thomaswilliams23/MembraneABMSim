@@ -71,3 +71,4 @@ mutable struct AllDataCUDA
     newly_tethered_agent_ixs::CuArray{Int, 1, CUDA.DeviceMemory}
 end
 
+
