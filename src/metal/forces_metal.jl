@@ -66,7 +66,7 @@ end
 
 Metal GPU kernel for computing next agent positions based on forces.
 """
-@kernel function _force_kernel!(
+@kernel function _force_kernel_metal!(
     positions::MtlDeviceVector{Float32},
     next_positions::MtlDeviceVector{Float32},
     effective_radii::MtlDeviceVector{Float32},

@@ -66,7 +66,7 @@ end
 
 CUDA GPU kernel for computing next agent positions based on forces.
 """
-@kernel function _force_kernel!(
+@kernel function _force_kernel_CUDA!(
     positions::CuArray{Float32, 1, CUDA.DeviceMemory},
     next_positions::CuArray{Float32, 1, CUDA.DeviceMemory},
     effective_radii::CuArray{Float32, 1, CUDA.DeviceMemory},

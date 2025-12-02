@@ -7,8 +7,8 @@ structures necessary for running the simulation with a GPU.
 function initialise_system_CUDA(params::AllParams; clear_existing_output::Bool=false, suppress_prints::Bool=false)
 
     #build the kernels
-    non_force_position_kernel = _non_force_position_kernel!(CUDABackend())
-    force_kernel = _force_kernel!(CUDABackend())
+    non_force_position_kernel = _non_force_position_kernel_CUDA!(CUDABackend())
+    force_kernel = _force_kernel_CUDA!(CUDABackend())
 
     # set up output directory structure
     set_up_output_directory(params.system.output_dir; clear_existing_output=clear_existing_output)

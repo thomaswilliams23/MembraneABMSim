@@ -13,7 +13,7 @@ Applies non-force-driven changes to agent positions using a CUDA GPU kernel. Spe
  - updating nascent-inserting ideal distances
  - updating effective radii of nascent agents
 """
-function compute_non_force_position_changes!(
+function compute_non_force_position_changes_CUDA!(
     non_force_position_kernel,
     agents::AllAgents,
     all_data_CUDA::AllDataCUDA,
@@ -100,7 +100,7 @@ end
 
 CUDA GPU kernel for computing non-force position changes.
 """
-@kernel function _non_force_position_kernel!(
+@kernel function _non_force_position_kernel_CUDA!(
     positions::CuArray{Float32, 1, CUDA.DeviceMemory},
     next_positions::CuArray{Float32, 1, CUDA.DeviceMemory},
     effective_radii::CuArray{Float32, 1, CUDA.DeviceMemory},

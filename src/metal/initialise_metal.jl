@@ -7,8 +7,8 @@ structures necessary for running the simulation with a GPU.
 function initialise_system_metal(params::AllParams; clear_existing_output::Bool=false)
 
     #build the kernels
-    non_force_position_kernel = _non_force_position_kernel!(MetalBackend())
-    force_kernel = _force_kernel!(MetalBackend())
+    non_force_position_kernel = _non_force_position_kernel_metal!(MetalBackend())
+    force_kernel = _force_kernel_metal!(MetalBackend())
 
     # set up output directory structure
     set_up_output_directory(params.system.output_dir; clear_existing_output=clear_existing_output)

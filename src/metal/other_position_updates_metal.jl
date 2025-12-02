@@ -13,7 +13,7 @@ Applies non-force-driven changes to agent positions using a Metal GPU kernel. Sp
  - updating nascent-inserting ideal distances
  - updating effective radii of nascent agents
 """
-function compute_non_force_position_changes!(
+function compute_non_force_position_changes_metal!(
     non_force_position_kernel,
     agents::AllAgents,
     all_data_metal::AllDataMetal,
@@ -57,7 +57,7 @@ function compute_non_force_position_changes!(
     # - updating nascent-inserting ideal distances (already done on CPU)
     # - updating effective radii of nascent agents (already done on CPU)
     num_newly_tethered = length(newly_tethered_agent_ixs)
-    non_force_position_kernel(
+    non_force_position_kernel_metal!(
         all_data_metal.positions,
         all_data_metal.next_positions,
         all_data_metal.effective_radii,
@@ -100,7 +100,7 @@ end
 
 Metal GPU kernel for computing non-force position changes.
 """
-@kernel function _non_force_position_kernel!(
+@kernel function _non_force_position_kernel_metal!(
     positions::MtlDeviceVector{Float32},
     next_positions::MtlDeviceVector{Float32},
     effective_radii::MtlDeviceVector{Float32},
