@@ -1,10 +1,10 @@
 """
-    initialise_system_metal(params::AllParams; clear_existing_output::Bool=false)
+    initialise_system_metal(params::AllParams; clear_existing_output::Bool=false, suppress_prints::Bool=false)
 
 Initialises the simulation system using the Metal GPU backend. Includes additional data 
 structures necessary for running the simulation with a GPU.
 """
-function initialise_system_metal(params::AllParams; clear_existing_output::Bool=false)
+function initialise_system_metal(params::AllParams; clear_existing_output::Bool=false, suppress_prints::Bool=false)
 
     #build the kernels
     non_force_position_kernel = _non_force_position_kernel!(MetalBackend())
@@ -15,7 +15,9 @@ function initialise_system_metal(params::AllParams; clear_existing_output::Bool=
 
     # decide which initialisation to use
     if params.init.method == "random"
-        println("Initialising model with random distribution of agents...")
+        if !suppress_prints
+            println("Initialising model with random distribution of agents...")
+        end
         (
             agents, 
             grid_size,
@@ -24,7 +26,7 @@ function initialise_system_metal(params::AllParams; clear_existing_output::Bool=
             all_data_metal,
             grid_size_metal,
             params_metal
-        ) = initialise_system_random_metal(force_kernel, params)
+        ) = initialise_system_random_metal(force_kernel, params; suppress_prints=suppress_prints)
     else
         #TODO: implement other initialisation methods?
         error("Initialisation type $(params.initialisation.init_type) not recognised.")
@@ -41,7 +43,7 @@ end
 
 Initialises agents randomly within the domain and runs equilibration using Metal GPU backend.
 """
-function initialise_system_random_metal(force_kernel, params::AllParams)
+function initialise_system_random_metal(force_kernel, params::AllParams; suppress_prints::Bool=false)
 
     #initialise as per CPU version
     grid_size, grid = initialise_grid(params)
@@ -98,12 +100,16 @@ function initialise_system_random_metal(force_kernel, params::AllParams)
         
         #report time
         if abs(t/params.system.vis_dt - round(t/params.system.vis_dt))<time_err
-            @printf "Running equilibration: τ=%5.2f\r" t
+            if !suppress_prints
+                @printf "Running equilibration: τ=%5.2f\r" t
+            end
         end
     end
 
-    println("\nEquilibration complete.")
-
+    if !suppress_prints
+        println("\nEquilibration complete.")
+    end
+    
     #now copy across to cpu
     if params.init.equilibration_time > time_err
         copy_data_to_cpu!(system_flat_cpu, agents, all_data_metal, grid_size_metal)
