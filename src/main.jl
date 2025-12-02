@@ -6,7 +6,7 @@
 Main driver function. Given the path of a config JSON file, parses the config, then runs a 
 simulation according to the settings given in the config.
 """
-function run_sim(config_pathname::String; clear_existing_output::Bool=false)
+function run_sim(config_pathname::String; clear_existing_output::Bool=false, suppress_prints::Bool=false)
 
     #parse the config and add a copy to the output directory
     params = parse_config(config_pathname)
@@ -15,17 +15,23 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false)
 
     #if specified, set the random seed
     if !isnothing(params.system.seed)
-        println("Running with random seed $(params.system.seed)")
+        if !suppress_prints
+            println("Running with random seed $(params.system.seed)")
+        end
         Random.seed!(params.system.seed)
     end
 
     #determine device to use
     device = "cpu"
     if params.system.device == "metal"
-        println("Running on Metal GPU")
+        if !suppress_prints
+            println("Running on Metal GPU")
+        end
         device = "metal"
     elseif params.system.device == "cpu"
-        println("Running on CPU")
+        if !suppress_prints
+            println("Running on CPU")
+        end
         device = "cpu"
     else
         if !isnothing(params.system.device)
@@ -45,7 +51,7 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false)
             grid_size, 
             grid, 
             system_flat_cpu
-        ) = initialise_system_cpu(params; clear_existing_output=clear_existing_output)
+        ) = initialise_system_cpu(params; clear_existing_output=clear_existing_output, suppress_prints=suppress_prints)
     elseif device=="metal"
         (
             non_force_position_kernel,
@@ -57,7 +63,7 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false)
             all_data_metal, 
             grid_size_metal, 
             params_metal
-        ) = initialise_system_metal(params; clear_existing_output=clear_existing_output)
+        ) = initialise_system_metal(params; clear_existing_output=clear_existing_output, suppress_prints=suppress_prints)
         effective_rad_incs_metal = Float32.(effective_rad_incs)
         ideal_dist_incs_metal = Float32.(ideal_dist_incs)
     end
@@ -181,11 +187,15 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false)
             output_ix = round(Int, time_ix/output_ix_interval)
             write_system_state(agents, grid_size.dims, params.system.output_dir, output_ix)
 
-            @printf "Running: t=%5.2f\r" t
+            if !suppress_prints
+                @printf "Running: t=%5.2f\r" t
+            end
         end
     end
 
-    println("\nSimulation complete.")
+    if !suppress_prints
+        println("\nSimulation complete.")
+    end
     return
 end
 
@@ -208,7 +218,8 @@ function run_sweep(sweep_config_pathname::String)
     def_params = parse_config(sweep_config.default_config)
 
     #iterate through changes to be made as specified in the sweep config (and also reps)
-    for (sim_path, sim_param_changes) in sim_dict
+    all_sims = [sim_pair for sim_pair in sim_dict]
+    Threads.@threads for (sim_path, sim_param_changes) in all_sims
 
         #set up output directory for this sim
         out_path = joinpath(sweep_config.output_base_dir, sim_path)
@@ -224,7 +235,8 @@ function run_sweep(sweep_config_pathname::String)
         end
 
         #run the sim
-        run_sim(config_fname)
+        run_sim(config_fname; suppress_prints=true)
+        println("Completed simulation at $sim_path")
     end
 
 end
