@@ -31,6 +31,13 @@ module MembraneABMSim
     include("metal/other_position_updates_metal.jl")
     include("metal/utils_metal.jl")
 
+    include("CUDA/CUDATypes.jl")
+    include("CUDA/data_transfer_CUDA.jl")
+    include("CUDA/forces_CUDA.jl")
+    include("CUDA/initialise_CUDA.jl")
+    include("CUDA/other_position_updates_CUDA.jl")
+    include("CUDA/utils_CUDA.jl")
+
     include("postprocessing/postprocessing_utils.jl")
     include("postprocessing/metrics.jl")
 
