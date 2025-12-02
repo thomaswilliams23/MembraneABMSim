@@ -70,5 +70,3 @@ mutable struct AllDataCUDA
     #additional field for efficient updating when tethers form
     newly_tethered_agent_ixs::CuArray{Int, 1, CUDA.DeviceMemory}
 end
-
-
