@@ -292,6 +292,18 @@ function update_flat_data_nascent_agents!(agents::AllAgents, system_flat::AllAge
     for nascent_LPS in agents.nascent.nascent_LPS
         #update nascent identifier
         sorted_ix = system_flat.agent_ix_to_sorted_ix[nascent_LPS.index]
+        
+
+        #DEBUG
+        if sorted_ix==0
+            println("About to crash, dumping info:")
+            println("nascent_LPS.index = $(nascent_LPS.index)")
+            println("length of agent_ix_to_sorted_ix = $(length(system_flat.agent_ix_to_sorted_ix))")
+
+            error("Sorted index for nascent LPS index $(nascent_LPS.index) is 0!")
+        end
+
+
         system_flat.identifiers[sorted_ix] = make_identifier(;
             is_tethered=false, 
             agent_type="LPS", 
