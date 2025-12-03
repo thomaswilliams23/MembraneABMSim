@@ -417,6 +417,10 @@ function update_Lpt_subsystem!(agents::AllAgents, grid_size::GridSize, system_fl
                 LPS_arrival_dist = Poisson(params.LPS.arrival_rate * params.system.dt)
                 insert_new_LPS = (rand(LPS_arrival_dist)>0.0)
                 if insert_new_LPS
+			
+		    #DEBUG
+		    println("Inserting a new LPS agent at time $t")
+
                     #make new nascent OMP and update agents and grid structures
                     generate_nascent_LPS_obj!(agents, grid_size, LptD, t, params)
 
