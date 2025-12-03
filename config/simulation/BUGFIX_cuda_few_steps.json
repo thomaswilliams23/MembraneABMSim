@@ -35,7 +35,7 @@
         "num_LPS": 2000,
         "num_PP": 0,
         "method": "random",
-        "equilibration_time": 10,
+        "equilibration_time": 0,
         "complexes_assembled": true
     },
     "insertion": {
@@ -63,9 +63,10 @@
     "system": {
         "density": 0.9,
         "dt": 0.001,
-        "t_max": 30,
+        "t_max": 0.1,
         "vis_dt": 0.1,
-        "output_dir": "TEST_huge_cpu",
-        "seed": 1
+        "output_dir": "BUGFIX_cuda_huge",
+        "seed": 1,
+        "device": "cuda"
     }
 }
