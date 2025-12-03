@@ -295,12 +295,12 @@ function update_flat_data_nascent_agents!(agents::AllAgents, system_flat::AllAge
         
 
         #DEBUG
-        if sorted_ix==0
+        if sorted_ix==0 || sorted_ix>length(system_flat.identifiers)
             println("About to crash, dumping info:")
             println("nascent_LPS.index = $(nascent_LPS.index)")
             println("length of agent_ix_to_sorted_ix = $(length(system_flat.agent_ix_to_sorted_ix))")
 
-            error("Sorted index for nascent LPS index $(nascent_LPS.index) is 0!")
+            error("Sorted index for nascent LPS index $(nascent_LPS.index) is $(sorted_ix)")
         end
 
 
