@@ -232,7 +232,7 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false)
             output_ix = round(Int, time_ix/output_ix_interval)
             write_system_state(agents, grid_size.dims, params.system.output_dir, output_ix)
 
-            # @printf "Running: t=%5.2f\r" t
+            @printf "Running: t=%5.2f\r" t
         end
     end
 
