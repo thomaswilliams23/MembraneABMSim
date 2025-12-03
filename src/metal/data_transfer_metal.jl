@@ -112,6 +112,7 @@ function copy_data_to_metal!(all_data_metal::AllDataMetal, grid_size_metal::Grid
         copyto!(all_data_metal.z_ix_to_coords, grid.z_ix_to_coords[1:2*grid_size.tot_num_cells])
         grid_size_metal.num_cells = grid_size.num_cells
         grid_size_metal.tot_num_cells = grid_size.tot_num_cells
+        grid_size.grid_size_changed = false
     end
 
 end

@@ -125,14 +125,24 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false)
             end
 
             steps_since_grid_sync = 0
+            grid_size.num_agents_changed = false
         end
 
-        #if any nascent agents have been promoted, need to update flat data structure on gpu
-        if device=="metal" && grid_size.nascent_promoted
-            update_nascent_promotion_metal!(all_data_metal, system_flat_cpu, grid_size)
-        elseif device=="cuda" && grid_size.nascent_promoted
-            update_nascent_promotion_CUDA!(all_data_CUDA, system_flat_cpu, grid_size)
+        #if any nascent agents have been promoted, need to update flat data structure and pass to gpu
+        if grid_size.nascent_promoted
+
+            update_flat_data_nascent_agents!(agents, system_flat_cpu)
+
+            #if using metal, update nascent promotion on GPU
+            if device=="metal"
+                update_nascent_promotion_metal!(all_data_metal, system_flat_cpu, grid_size)
+            elseif device=="cuda"
+                update_nascent_promotion_CUDA!(all_data_CUDA, system_flat_cpu, grid_size)
+            end
+
+            grid_size.nascent_promoted = false
         end
+
 
         #check for any new tethering or assembly
         newly_tethered_agent_ixs = update_tethering_and_assembly!(agents, system_flat_cpu, params)

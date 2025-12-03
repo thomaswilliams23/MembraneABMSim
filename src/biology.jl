@@ -100,7 +100,7 @@ function update_BAM_subsystem!(agents::AllAgents, grid_size::GridSize, grid::Sim
                     #if so, make a new nascent OMP on the edge of the BamA and update this BamA's state
                     if insertion_accepted
                         #make new nascent OMP and update agents and grid structures
-                        generate_nascent_OMP_obj!(agents, grid_size, BamA, t, params)
+                        generate_nascent_OMP_obj!(agents, grid_size, system_flat, BamA, t, params)
 
                         #update this BamA too
                         BamA.insertion_state = "embedding"
@@ -244,7 +244,7 @@ function update_BAM_subsystem!(agents::AllAgents, grid_size::GridSize, grid::Sim
         #DEBUG
         println("Promoted $(length(nascent_OMP_ixs_to_delete)) nascent OMP agents at time t=$(t)")
 
-        update_flat_data_nascent_agents!(agents, system_flat)
+        #update_flat_data_nascent_agents!(agents, system_flat)
         grid_size.nascent_promoted = true
     end
 
@@ -341,13 +341,13 @@ end
 
 
 """
-    generate_nascent_OMP_obj!(agents::AllAgents, grid_size::GridSize, BamA::BamAAgent, arrival_time::Float64, params::AllParams)
+    generate_nascent_OMP_obj!(agents::AllAgents, grid_size::GridSize, system_flat::AllAgentsFlat, BamA::BamAAgent, arrival_time::Float64, params::AllParams)
 
 Given an inserting BamA agent (and other relevant information), generates a new nascent OMP somewhere on the
 interior of the edge of the BamA and writes the new nascent OMP into the agents structure. Also updates total
 agent count in the grid object.
 """
-function generate_nascent_OMP_obj!(agents::AllAgents, grid_size::GridSize, BamA::BamAAgent, arrival_time::Float64, params::AllParams)
+function generate_nascent_OMP_obj!(agents::AllAgents, grid_size::GridSize, system_flat::AllAgentsFlat, BamA::BamAAgent, arrival_time::Float64, params::AllParams)
     
     #small perturbation to ensure BamA and its substrate are never in the exact same position (messes up forces)
     insertion_eps = 1e-6
@@ -392,6 +392,8 @@ function generate_nascent_OMP_obj!(agents::AllAgents, grid_size::GridSize, BamA:
         nascent_OMP_type,
         BamA.index
     )
+
+    #update the 
 
     #push to AllAgents structure
     push!(agents.nascent.nascent_OMP, new_nascent_OMP)
@@ -506,7 +508,7 @@ function update_Lpt_subsystem!(agents::AllAgents, grid_size::GridSize, system_fl
         println("Total nascent LPS remaining: $(length(agents.nascent.nascent_LPS))")
 
 
-        update_flat_data_nascent_agents!(agents, system_flat)
+        #update_flat_data_nascent_agents!(agents, system_flat)
         grid_size.nascent_promoted = true
     end
 

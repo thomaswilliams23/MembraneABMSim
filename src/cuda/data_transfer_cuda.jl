@@ -112,6 +112,7 @@ function copy_data_to_CUDA!(all_data_CUDA::AllDataCUDA, grid_size_CUDA::GridSize
         copyto!(all_data_CUDA.z_ix_to_coords, grid.z_ix_to_coords[1:2*grid_size.tot_num_cells])
         grid_size_CUDA.num_cells = grid_size.num_cells
         grid_size_CUDA.tot_num_cells = grid_size.tot_num_cells
+        grid_size.grid_size_changed = false
     end
 
 end

@@ -59,6 +59,7 @@ function initialise_system_random_CUDA(force_kernel, params::AllParams; suppress
     rebuild_grid!(grid_size, grid, agents, params.force.sensing_radius)
     compile_flat_system_data_cpu!(system_flat_cpu, agents, grid_size, grid, params)
     put_grid_in_sorted_order!(grid_size, grid, system_flat_cpu)
+    grid_size.num_agents_changed = false
 
     #copy data to CUDA GPU
     copy_data_to_CUDA!(all_data_CUDA, grid_size_CUDA, system_flat_cpu, grid_size, grid)
