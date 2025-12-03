@@ -242,7 +242,7 @@ function update_BAM_subsystem!(agents::AllAgents, grid_size::GridSize, grid::Sim
         deleteat!(agents.nascent.nascent_OMP, nascent_OMP_ixs_to_delete)
 
         #DEBUG
-        #println("Promoted $(length(nascent_OMP_ixs_to_delete)) nascent OMP agents at time t=$(t)")
+        println("Promoted $(length(nascent_OMP_ixs_to_delete)) nascent OMP agents at time t=$(t)")
 
         update_flat_data_nascent_agents!(agents, system_flat)
         grid_size.nascent_promoted = true
@@ -428,7 +428,7 @@ function update_Lpt_subsystem!(agents::AllAgents, grid_size::GridSize, system_fl
                 if insert_new_LPS
 			
 		            #DEBUG
-		            #println("Inserting a new LPS agent at time $t")
+		            println("Inserting a new LPS agent at time $t")
 
                     #make new nascent OMP and update agents and grid structures
                     generate_nascent_LPS_obj!(agents, grid_size, LptD, t, params)
@@ -499,8 +499,8 @@ function update_Lpt_subsystem!(agents::AllAgents, grid_size::GridSize, system_fl
         deleteat!(agents.nascent.nascent_LPS, nascent_LPS_ixs_to_delete)
 
         #DEBUG
-        #println("Promoted $(length(nascent_LPS_ixs_to_delete)) nascent LPS agents at time t=$(t)")
-        #println("Total nascent LPS remaining: $(length(agents.nascent.nascent_LPS))")
+        println("Promoted $(length(nascent_LPS_ixs_to_delete)) nascent LPS agents at time t=$(t)")
+        println("Total nascent LPS remaining: $(length(agents.nascent.nascent_LPS))")
 
 
         update_flat_data_nascent_agents!(agents, system_flat)
