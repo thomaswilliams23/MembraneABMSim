@@ -241,9 +241,6 @@ function update_BAM_subsystem!(agents::AllAgents, grid_size::GridSize, grid::Sim
         #delete the nascent agents which have been promoted
         deleteat!(agents.nascent.nascent_OMP, nascent_OMP_ixs_to_delete)
 
-        #DEBUG
-        println("Promoted $(length(nascent_OMP_ixs_to_delete)) nascent OMP agents at time t=$(t)")
-
         #update_flat_data_nascent_agents!(agents, system_flat)
         grid_size.nascent_promoted = true
     end
@@ -298,18 +295,6 @@ function update_flat_data_nascent_agents!(agents::AllAgents, system_flat::AllAge
     for nascent_LPS in agents.nascent.nascent_LPS
         #update nascent identifier
         sorted_ix = system_flat.agent_ix_to_sorted_ix[nascent_LPS.index]
-        
-
-        #DEBUG
-        if sorted_ix==0 || sorted_ix>length(system_flat.identifiers)
-            println("About to crash, dumping info:")
-            println("nascent_LPS.index = $(nascent_LPS.index)")
-            println("length of agent_ix_to_sorted_ix = $(length(system_flat.agent_ix_to_sorted_ix))")
-
-            error("Sorted index for nascent LPS index $(nascent_LPS.index) is $(sorted_ix)")
-        end
-
-
         system_flat.identifiers[sorted_ix] = make_identifier(;
             is_tethered=false, 
             agent_type="LPS", 
@@ -428,15 +413,9 @@ function update_Lpt_subsystem!(agents::AllAgents, grid_size::GridSize, system_fl
                 LPS_arrival_dist = Poisson(params.LPS.arrival_rate * params.system.dt)
                 insert_new_LPS = (rand(LPS_arrival_dist)>0.0)
                 if insert_new_LPS
-			
-		            #DEBUG
-		            println("LptD with index $(LptD.index) inserting a new LPS agent at time $t")
 
                     #make new nascent OMP and update agents and grid structures
                     generate_nascent_LPS_obj!(agents, grid_size, LptD, t, params)
-
-                    #DEBUG
-                    println("Finished insertion, new agent has index $(agents.nascent.nascent_LPS[end].index)")
 
                     #update this LptD too
                     LptD.insertion_state = "embedding"
@@ -502,11 +481,6 @@ function update_Lpt_subsystem!(agents::AllAgents, grid_size::GridSize, system_fl
 
         #delete the nascent agents which have been promoted
         deleteat!(agents.nascent.nascent_LPS, nascent_LPS_ixs_to_delete)
-
-        #DEBUG
-        println("Promoted $(length(nascent_LPS_ixs_to_delete)) nascent LPS agents at time t=$(t)")
-        println("Total nascent LPS remaining: $(length(agents.nascent.nascent_LPS))")
-
 
         #update_flat_data_nascent_agents!(agents, system_flat)
         grid_size.nascent_promoted = true
