@@ -131,7 +131,7 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false)
         if device=="metal" && grid_size.nascent_promoted
             update_nascent_promotion_metal!(all_data_metal, system_flat_cpu, grid_size)
         elseif device=="cuda" && grid_size.nascent_promoted
-            update_nascent_promotion_cuda!(all_data_CUDA, system_flat_cpu, grid_size)
+            update_nascent_promotion_CUDA!(all_data_CUDA, system_flat_cpu, grid_size)
         end
 
         #check for any new tethering or assembly
