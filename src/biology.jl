@@ -235,6 +235,9 @@ function update_BAM_subsystem!(agents::AllAgents, grid_size::GridSize, grid::Sim
 
                 #now update identifiers of all nascent agents and their inserting agents (since their nascent_ix has changed)
                 if length(nascent_OMP_ixs_to_delete)>0
+
+                    println("Promoted $(length(nascent_OMP_ixs_to_delete)) nascent OMP agents at time t=$(t)")
+
                     update_flat_data_nascent_agents!(agents, system_flat)
                     grid_size.nascent_promoted = true
                 end
