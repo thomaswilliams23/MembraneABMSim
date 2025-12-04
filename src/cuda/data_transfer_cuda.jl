@@ -6,7 +6,7 @@ In the case where a nascent agent has been promoted, copy across all updated nas
 function update_nascent_promotion_CUDA!(all_data_CUDA::AllDataCUDA, system_flat_cpu::AllAgentsFlat, grid_size::GridSize)
 
     #check that no GPU processes are ongoing
-    KernelAbstractions.synchronize(CUDABackend())
+    timed_sync_CUDA("update_nascent_promotion_CUDA!")
 
     #update nascent to inserting indices
     copyto!(all_data_CUDA.nascent_to_inserting_ixs, system_flat_cpu.nascent_to_inserting_ixs)
@@ -29,7 +29,7 @@ In the case where agents have just become tethered, copy across their indices to
 function update_newly_tethered_agent_ixs_CUDA!(all_data_CUDA::AllDataCUDA, newly_tethered_agent_ixs::Vector{Int})
 
     #check that no GPU processes are ongoing
-    KernelAbstractions.synchronize(CUDABackend())
+    timed_sync_CUDA("update_newly_tethered_agent_ixs_CUDA!")
 
     #handle resizing
     curr_capacity = length(all_data_CUDA.newly_tethered_agent_ixs)
@@ -128,7 +128,7 @@ Copies position and aggregate distance data from GPU to CPU.
 function copy_data_to_cpu_from_CUDA!(system_flat_cpu::AllAgentsFlat, agents::AllAgents, all_data_CUDA::AllDataCUDA, grid_size_CUDA::GridSizeCUDA)
 
     #make sure all previous GPU operations are complete
-    KernelAbstractions.synchronize(CUDABackend())
+    timed_sync_CUDA("copy_data_to_cpu_from_CUDA!")
 
     #copy the new positions and aggregate distances out to the cpu
     copyto!(system_flat_cpu.positions, all_data_CUDA.next_positions[1:2*grid_size_CUDA.num_agents])

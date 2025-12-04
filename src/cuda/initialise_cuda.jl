@@ -92,7 +92,7 @@ function initialise_system_random_CUDA(force_kernel, params::AllParams; suppress
             grid_size_CUDA, 
             params_CUDA
         )
-        KernelAbstractions.synchronize(CUDABackend())
+        timed_sync_CUDA("resolve_forces_CUDA!")
         copyto!(all_data_CUDA.positions, all_data_CUDA.next_positions[1:2*grid_size_CUDA.num_agents])
         
         t += params.system.dt

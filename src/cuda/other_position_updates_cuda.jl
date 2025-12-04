@@ -29,7 +29,7 @@ function compute_non_force_position_changes_CUDA!(
 
 
     #make sure all previous GPU operations are complete
-    KernelAbstractions.synchronize(CUDABackend())
+    timed_sync_CUDA("compute_non_force_position_changes_CUDA!")
 
     #update positions field on GPU
     copyto!(all_data_CUDA.positions, all_data_CUDA.next_positions[1:2*grid_size_CUDA.num_agents])
@@ -57,6 +57,13 @@ function compute_non_force_position_changes_CUDA!(
     # - updating nascent-inserting ideal distances (already done on CPU)
     # - updating effective radii of nascent agents (already done on CPU)
     num_newly_tethered = length(newly_tethered_agent_ixs)
+
+
+    #DEBUG
+    ev_start = CUDA.CuEvent()
+    ev_end = CUDA.CuEvent()
+    CUDA.record(ev_start)
+
     non_force_position_kernel(
         all_data_CUDA.positions,
         all_data_CUDA.next_positions,
@@ -72,6 +79,12 @@ function compute_non_force_position_changes_CUDA!(
         num_newly_tethered;
         ndrange=grid_size_CUDA.num_agents
     )
+
+    #DEBUG
+    CUDA.record(ev_end)
+    CUDA.synchronize(ev_end)
+    elapsed = CUDA.elapsed(ev_start, ev_end)
+    println("CUDA non-force position kernel time (ms): ", 1000*elapsed)
 
     #change dims etc HERE (not before kernel call)
     grid_size.dims *= scale_factor

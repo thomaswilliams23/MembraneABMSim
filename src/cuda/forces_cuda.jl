@@ -6,7 +6,7 @@ Main function for computing forces and updating agent positions on the CUDA GPU.
 function resolve_forces_CUDA!(force_kernel, all_data_CUDA::AllDataCUDA, grid_size_CUDA::GridSizeCUDA, params_CUDA::ParamsCUDA)
 
     #ensure all previous GPU operations are complete
-    KernelAbstractions.synchronize(CUDABackend())
+    timed_sync_CUDA("resolve_forces_CUDA!")
 
     #update positions field on GPU
     copyto!(all_data_CUDA.positions, all_data_CUDA.next_positions[1:2*grid_size_CUDA.num_agents])
@@ -14,6 +14,11 @@ function resolve_forces_CUDA!(force_kernel, all_data_CUDA::AllDataCUDA, grid_siz
     #some calculations needed for kernel
     max_effective_radius = Float32(max(params_CUDA.OmpA_radius, params_CUDA.OmpCF_radius, params_CUDA.LptD_radius, params_CUDA.BamA_radius, params_CUDA.LPS_radius))
     max_agg_dist = maximum(all_data_CUDA.agg_dist_since_grid_sync)
+
+    #DEBUG
+    ev_start = CUDA.CuEvent()
+    ev_end = CUDA.CuEvent()
+    CUDA.record(ev_start)
 
     #run the force kernel
     force_kernel(
@@ -38,6 +43,13 @@ function resolve_forces_CUDA!(force_kernel, all_data_CUDA::AllDataCUDA, grid_siz
         params_CUDA;
         ndrange=grid_size_CUDA.num_agents
     )
+
+
+    #DEBUG
+    CUDA.record(ev_end)
+    CUDA.synchronize(ev_end)
+    elapsed = CUDA.elapsed(ev_start, ev_end)
+    println("CUDA force kernel time (ms): ", 1000*elapsed)
 end
 
 
