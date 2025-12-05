@@ -1,91 +1,91 @@
 """
-    resolve_forces_metal!(force_kernel, all_data_metal::AllDataMetal, grid_size_metal::GridSizeMetal, params_metal::ParamsMetal)
+    resolve_forces_CUDA!(force_kernel, all_data_CUDA::AllDataCUDA, grid_size_CUDA::GridSizeCUDA, params_CUDA::ParamsCUDA)
 
-Main function for computing forces and updating agent positions on the Metal GPU.
+Main function for computing forces and updating agent positions on the CUDA GPU.
 """
-function resolve_forces_metal!(force_kernel, all_data_metal::AllDataMetal, grid_size_metal::GridSizeMetal, params_metal::ParamsMetal)
+function resolve_forces_CUDA!(force_kernel, all_data_CUDA::AllDataCUDA, grid_size_CUDA::GridSizeCUDA, params_CUDA::ParamsCUDA)
 
     #ensure all previous GPU operations are complete
-    KernelAbstractions.synchronize(MetalBackend())
+    KernelAbstractions.synchronize(CUDABackend())
 
     #update positions field on GPU
-    copyto!(all_data_metal.positions, all_data_metal.next_positions[1:2*grid_size_metal.num_agents])
+    copyto!(all_data_CUDA.positions, all_data_CUDA.next_positions[1:2*grid_size_CUDA.num_agents])
 
     #some calculations needed for kernel
-    max_effective_radius = Float32(max(params_metal.OmpA_radius, params_metal.OmpCF_radius, params_metal.LptD_radius, params_metal.BamA_radius, params_metal.LPS_radius))
-    max_agg_dist = maximum(all_data_metal.agg_dist_since_grid_sync)
+    max_effective_radius = Float32(max(params_CUDA.OmpA_radius, params_CUDA.OmpCF_radius, params_CUDA.LptD_radius, params_CUDA.BamA_radius, params_CUDA.LPS_radius))
+    max_agg_dist = maximum(all_data_CUDA.agg_dist_since_grid_sync)
 
     #run the force kernel
     force_kernel(
-        all_data_metal.positions,
-        all_data_metal.next_positions,
-        all_data_metal.effective_radii,
-        all_data_metal.identifiers,
-        all_data_metal.tether_points,
-        all_data_metal.agg_dist_since_grid_sync,
-        all_data_metal.nascent_to_inserting_ixs,
-        all_data_metal.nascent_to_substrate_ixs,
-        all_data_metal.substrate_inserting_ideal_dists,
-        all_data_metal.coords_to_z_ix,
-        all_data_metal.z_ix_to_coords,
-        all_data_metal.agent_cell_z_ixs,
-        all_data_metal.num_agents_in_cell,
-        all_data_metal.start_agents_in_cell,
-        grid_size_metal.dims,
-        grid_size_metal.num_cells,
+        all_data_CUDA.positions,
+        all_data_CUDA.next_positions,
+        all_data_CUDA.effective_radii,
+        all_data_CUDA.identifiers,
+        all_data_CUDA.tether_points,
+        all_data_CUDA.agg_dist_since_grid_sync,
+        all_data_CUDA.nascent_to_inserting_ixs,
+        all_data_CUDA.nascent_to_substrate_ixs,
+        all_data_CUDA.substrate_inserting_ideal_dists,
+        all_data_CUDA.coords_to_z_ix,
+        all_data_CUDA.z_ix_to_coords,
+        all_data_CUDA.agent_cell_z_ixs,
+        all_data_CUDA.num_agents_in_cell,
+        all_data_CUDA.start_agents_in_cell,
+        grid_size_CUDA.dims,
+        grid_size_CUDA.num_cells,
         max_effective_radius,
         max_agg_dist,
-        params_metal;
-        ndrange=grid_size_metal.num_agents
+        params_CUDA;
+        ndrange=grid_size_CUDA.num_agents
     )
 end
 
 
 """
-    @kernel function compute_next_positions_metal!(
-        positions::MtlDeviceVector{Float32},
-        next_positions::MtlDeviceVector{Float32},
-        effective_radii::MtlDeviceVector{Float32},
-        identifiers::MtlDeviceVector{Int},
-        tether_points::MtlDeviceVector{Float32},
-        agg_dist_since_grid_sync::MtlDeviceVector{Float32},
-        nascent_to_inserting_ixs::MtlDeviceVector{Int},
-        nascent_to_substrate_ixs::MtlDeviceVector{Int},
-        substrate_inserting_ideal_dists::MtlDeviceVector{Float32},
-        coords_to_z_ix::MtlDeviceVector{Int},
-        z_ix_to_coords::MtlDeviceVector{Int},
-        agent_cell_z_ixs::MtlDeviceVector{Int},
-        num_agents_in_cell::MtlDeviceVector{Int},
-        start_agents_in_cell::MtlDeviceVector{Int},
+    @kernel function compute_next_positions_CUDA!(
+        positions::CuDeviceVector{Float32},
+        next_positions::CuDeviceVector{Float32},
+        effective_radii::CuDeviceVector{Float32},
+        identifiers::CuDeviceVector{Int},
+        tether_points::CuDeviceVector{Float32},
+        agg_dist_since_grid_sync::CuDeviceVector{Float32},
+        nascent_to_inserting_ixs::CuDeviceVector{Int},
+        nascent_to_substrate_ixs::CuDeviceVector{Int},
+        substrate_inserting_ideal_dists::CuDeviceVector{Float32},
+        coords_to_z_ix::CuDeviceVector{Int},
+        z_ix_to_coords::CuDeviceVector{Int},
+        agent_cell_z_ixs::CuDeviceVector{Int},
+        num_agents_in_cell::CuDeviceVector{Int},
+        start_agents_in_cell::CuDeviceVector{Int},
         dims::SVector{2, Float32},
         num_cells::SVector{2, Int},
         max_effective_radius::Float32,
         max_agg_dist::Float32,
-        params_metal::ParamsMetal
+        params_CUDA::ParamsCUDA
     )
 
-Metal GPU kernel for computing next agent positions based on forces.
+CUDA GPU kernel for computing next agent positions based on forces.
 """
-@kernel function _force_kernel_metal!(
-    positions::MtlDeviceVector{Float32},
-    next_positions::MtlDeviceVector{Float32},
-    effective_radii::MtlDeviceVector{Float32},
-    identifiers::MtlDeviceVector{Int},
-    tether_points::MtlDeviceVector{Float32},
-    agg_dist_since_grid_sync::MtlDeviceVector{Float32},
-    nascent_to_inserting_ixs::MtlDeviceVector{Int},
-    nascent_to_substrate_ixs::MtlDeviceVector{Int},
-    substrate_inserting_ideal_dists::MtlDeviceVector{Float32},
-    coords_to_z_ix::MtlDeviceVector{Int},
-    z_ix_to_coords::MtlDeviceVector{Int},
-    agent_cell_z_ixs::MtlDeviceVector{Int},
-    num_agents_in_cell::MtlDeviceVector{Int},
-    start_agents_in_cell::MtlDeviceVector{Int},
+@kernel function _force_kernel_CUDA!(
+    positions::CuDeviceVector{Float32},
+    next_positions::CuDeviceVector{Float32},
+    effective_radii::CuDeviceVector{Float32},
+    identifiers::CuDeviceVector{Int},
+    tether_points::CuDeviceVector{Float32},
+    agg_dist_since_grid_sync::CuDeviceVector{Float32},
+    nascent_to_inserting_ixs::CuDeviceVector{Int},
+    nascent_to_substrate_ixs::CuDeviceVector{Int},
+    substrate_inserting_ideal_dists::CuDeviceVector{Float32},
+    coords_to_z_ix::CuDeviceVector{Int},
+    z_ix_to_coords::CuDeviceVector{Int},
+    agent_cell_z_ixs::CuDeviceVector{Int},
+    num_agents_in_cell::CuDeviceVector{Int},
+    start_agents_in_cell::CuDeviceVector{Int},
     dims::SVector{2, Float32},
     num_cells::SVector{2, Int},
     max_effective_radius::Float32,
     max_agg_dist::Float32,
-    params_metal::ParamsMetal
+    params_CUDA::ParamsCUDA
     )
 
     # Get sorted index
@@ -93,7 +93,7 @@ Metal GPU kernel for computing next agent positions based on forces.
 
     #parse this agent's identifier
     identifier = identifiers[sorted_ix]
-    is_tethered, agent_type_num, is_nascent, is_inserting, nascent_ix = parse_identifier_metal(identifier)
+    is_tethered, agent_type_num, is_nascent, is_inserting, nascent_ix = parse_identifier_CUDA(identifier)
 
     #if inserting or nascent, get the substrate/inserting ix so we can ignore it in attraction/repulsion force calculations
     if is_inserting==1
@@ -105,7 +105,7 @@ Metal GPU kernel for computing next agent positions based on forces.
     end
 
     #tally forces acting on this agent (ignore substrate/inserting agent, if one exists)
-    resultant_force = tally_attr_rep_forces_metal(
+    resultant_force = tally_attr_rep_forces_CUDA(
         sorted_ix,
         sorted_substrate_inserting_ix,
         positions,
@@ -121,7 +121,7 @@ Metal GPU kernel for computing next agent positions based on forces.
         num_cells,
         max_effective_radius,
         max_agg_dist,
-        params_metal
+        params_CUDA
     )
 
     #if this agent has a substrate/inserting agent, compute the spring force between them
@@ -134,29 +134,29 @@ Metal GPU kernel for computing next agent positions based on forces.
             positions[sorted_substrate_inserting_ix*2-1], 
             positions[sorted_substrate_inserting_ix*2]
         )
-        resultant_force += compute_inserting_substrate_force_metal(
+        resultant_force += compute_inserting_substrate_force_CUDA(
             agent_pos,
             neigh_pos,
             dims,
             substrate_inserting_ideal_dists[nascent_ix],
-            params_metal.insertion_mu_attr,
-            params_metal.insertion_mu_rep,
-            params_metal.max_repulsion,
-            params_metal.rho,
-            params_metal.insertion_k_C
+            params_CUDA.insertion_mu_attr,
+            params_CUDA.insertion_mu_rep,
+            params_CUDA.max_repulsion,
+            params_CUDA.rho,
+            params_CUDA.insertion_k_C
         )
     end
 
     #get actual radius
     if is_nascent == 1 && agent_type_num != 2  #ie. is a nascent OMP
         if agent_type_num == 1 #OmpA
-            act_rad = params_metal.OmpA_radius
+            act_rad = params_CUDA.OmpA_radius
         elseif agent_type_num == 3 #OmpCF
-            act_rad = params_metal.OmpCF_radius
+            act_rad = params_CUDA.OmpCF_radius
         elseif agent_type_num == 5 #BamA
-            act_rad = params_metal.BamA_radius
+            act_rad = params_CUDA.BamA_radius
         elseif agent_type_num == 7 #LptD
-            act_rad = params_metal.LptD_radius
+            act_rad = params_CUDA.LptD_radius
         else
             act_rad = 0.0f0  #should never happen
         end
@@ -166,7 +166,7 @@ Metal GPU kernel for computing next agent positions based on forces.
     end
 
     #compute the displacement from the resultant force
-    displacement = (params_metal.dt/(params_metal.eta*act_rad))*resultant_force
+    displacement = (params_CUDA.dt/(params_CUDA.eta*act_rad))*resultant_force
 
     #compute proposal position from force sum
     agent_pos = SVector{2, Float32}(positions[2*sorted_ix-1], positions[2*sorted_ix])
@@ -180,13 +180,13 @@ Metal GPU kernel for computing next agent positions based on forces.
     if is_tethered==1
         tether_pos = SVector{2, Float32}(tether_points[2*sorted_ix-1], tether_points[2*sorted_ix])
         if agent_type_num == 1 #OmpA
-            tether_length = params_metal.OmpA_tether_radius
+            tether_length = params_CUDA.OmpA_tether_radius
         elseif agent_type_num == 7 #LptD
-            tether_length = params_metal.LptD_tether_radius
+            tether_length = params_CUDA.LptD_tether_radius
         else
             tether_length = 0.0f0  #should never happen
         end
-        if shortest_distance_metal(next_pos, tether_pos, dims)>tether_length
+        if shortest_distance_CUDA(next_pos, tether_pos, dims)>tether_length
             #make next position same as old position
             next_pos = SVector{2, Float32}(positions[2*sorted_ix-1], positions[2*sorted_ix])
         else
@@ -209,44 +209,44 @@ end
 
 
 """
-    function tally_attr_rep_forces_metal(
+    function tally_attr_rep_forces_CUDA(
         sorted_ix::Int, 
         sorted_substrate_inserting_ix::Int,
-        positions::MtlDeviceVector{Float32},
-        effective_radii::MtlDeviceVector{Float32},
-        identifiers::MtlDeviceVector{Int},
-        agg_dist_since_grid_sync::MtlDeviceVector{Float32},
-        coords_to_z_ix::MtlDeviceVector{Int},
-        z_ix_to_coords::MtlDeviceVector{Int},
-        agent_cell_z_ixs::MtlDeviceVector{Int},
-        num_agents_in_cell::MtlDeviceVector{Int},
-        start_agents_in_cell::MtlDeviceVector{Int},
+        positions::CuDeviceVector{Float32},
+        effective_radii::CuDeviceVector{Float32},
+        identifiers::CuDeviceVector{Int},
+        agg_dist_since_grid_sync::CuDeviceVector{Float32},
+        coords_to_z_ix::CuDeviceVector{Int},
+        z_ix_to_coords::CuDeviceVector{Int},
+        agent_cell_z_ixs::CuDeviceVector{Int},
+        num_agents_in_cell::CuDeviceVector{Int},
+        start_agents_in_cell::CuDeviceVector{Int},
         dims::SVector{2, Float32},
         num_cells::SVector{2, Int},
         max_effective_radius::Float32,
         max_agg_dist::Float32,
-        params_metal::ParamsMetal
+        params_CUDA::ParamsCUDA
     )
 
 Tally the total attraction/repulsion forces acting on an agent from its neighbours. Directly analogous to the CPU version.
 """
-@inline function tally_attr_rep_forces_metal(
+@inline function tally_attr_rep_forces_CUDA(
         sorted_ix::Int, 
         sorted_substrate_inserting_ix::Int,
-        positions::MtlDeviceVector{Float32},
-        effective_radii::MtlDeviceVector{Float32},
-        identifiers::MtlDeviceVector{Int},
-        agg_dist_since_grid_sync::MtlDeviceVector{Float32},
-        coords_to_z_ix::MtlDeviceVector{Int},
-        z_ix_to_coords::MtlDeviceVector{Int},
-        agent_cell_z_ixs::MtlDeviceVector{Int},
-        num_agents_in_cell::MtlDeviceVector{Int},
-        start_agents_in_cell::MtlDeviceVector{Int},
+        positions::CuDeviceVector{Float32},
+        effective_radii::CuDeviceVector{Float32},
+        identifiers::CuDeviceVector{Int},
+        agg_dist_since_grid_sync::CuDeviceVector{Float32},
+        coords_to_z_ix::CuDeviceVector{Int},
+        z_ix_to_coords::CuDeviceVector{Int},
+        agent_cell_z_ixs::CuDeviceVector{Int},
+        num_agents_in_cell::CuDeviceVector{Int},
+        start_agents_in_cell::CuDeviceVector{Int},
         dims::SVector{2, Float32},
         num_cells::SVector{2, Int},
         max_effective_radius::Float32,
         max_agg_dist::Float32,
-        params_metal::ParamsMetal
+        params_CUDA::ParamsCUDA
     ) :: SVector{2, Float32}
 
     #initialise
@@ -258,7 +258,7 @@ Tally the total attraction/repulsion forces acting on an agent from its neighbou
     agent_cell_jx = z_ix_to_coords[2*agent_cell_z_ix]
 
     #calculate how wide around this cell we need to search for neighbours
-    agent_buffer_radius = effective_radii[sorted_ix] + params_metal.sensing_radius + max_effective_radius
+    agent_buffer_radius = effective_radii[sorted_ix] + params_CUDA.sensing_radius + max_effective_radius
     
     #add in the error from movement of this agent and all possible neighbours since last grid sync
     agent_buffer_radius += max_agg_dist + agg_dist_since_grid_sync[sorted_ix]
@@ -296,11 +296,11 @@ Tally the total attraction/repulsion forces acting on an agent from its neighbou
                         (identifiers[sorted_ix] & 1) + 
                         (identifiers[sorted_n_ix] & 1)
                     if num_OMPs_in_interaction==0
-                        mu_attr = params_metal.mu_attr_LPS_LPS
+                        mu_attr = params_CUDA.mu_attr_LPS_LPS
                     elseif num_OMPs_in_interaction==1
-                        mu_attr = params_metal.mu_attr_OMP_LPS
+                        mu_attr = params_CUDA.mu_attr_OMP_LPS
                     elseif num_OMPs_in_interaction==2
-                        mu_attr = params_metal.mu_attr_OMP_OMP
+                        mu_attr = params_CUDA.mu_attr_OMP_OMP
                     else
                         mu_attr = 0.0f0  #should never happen
                     end
@@ -310,18 +310,18 @@ Tally the total attraction/repulsion forces acting on an agent from its neighbou
                     neighbour_position = SVector{2, Float32}(positions[2*sorted_n_ix-1], positions[2*sorted_n_ix])
 
                     #compute force between agent and neighbour
-                    resultant_force += compute_attr_rep_force_metal(
+                    resultant_force += compute_attr_rep_force_CUDA(
                         agent_position,
                         effective_radii[sorted_ix],
                         neighbour_position,
                         effective_radii[sorted_n_ix],
                         dims,
-                        params_metal.sensing_radius,
+                        params_CUDA.sensing_radius,
                         mu_attr,
-                        params_metal.mu_rep,
-                        params_metal.max_repulsion,
-                        params_metal.rho,
-                        params_metal.k_C
+                        params_CUDA.mu_rep,
+                        params_CUDA.max_repulsion,
+                        params_CUDA.rho,
+                        params_CUDA.k_C
                     )
             
                 end
@@ -337,22 +337,22 @@ end
 
 
 """
-    function compute_attr_rep_force_metal(agent_pos::SVector{2, Float32}, agent_rad::Float32, 
+    function compute_attr_rep_force_CUDA(agent_pos::SVector{2, Float32}, agent_rad::Float32, 
                                           neighbour_pos::SVector{2, Float32}, neighbour_rad::Float32, 
                                           dims::SVector{2, Float32}, sensing_radius::Float32, 
                                           mu_attr::Float32, mu_rep::Float32, max_repulsion::Float32,
                                           rho::Float32, k_C::Float32)
     
-Compute the attraction/repulsion force between two agents in the metal simulation.
+Compute the attraction/repulsion force between two agents in the CUDA simulation.
 """
-@inline function compute_attr_rep_force_metal(agent_pos::SVector{2, Float32}, agent_rad::Float32, 
+@inline function compute_attr_rep_force_CUDA(agent_pos::SVector{2, Float32}, agent_rad::Float32, 
                                       neighbour_pos::SVector{2, Float32}, neighbour_rad::Float32, 
                                       dims::SVector{2, Float32}, sensing_radius::Float32, 
                                       mu_attr::Float32, mu_rep::Float32, max_repulsion::Float32,
                                       rho::Float32, k_C::Float32) :: SVector{2, Float32}
 
     #compute vector and distance between agents
-    force_vec = shortest_vec_metal(agent_pos, neighbour_pos, dims)
+    force_vec = shortest_vec_CUDA(agent_pos, neighbour_pos, dims)
     dist = sqrt(force_vec[1]*force_vec[1] + force_vec[2]*force_vec[2])
 
     #catch the case where distance is extremely small (avoid div by zero)
@@ -390,13 +390,13 @@ end
 
 
 """
-    compute_inserting_substrate_force_metal(agent_pos::SVector{2, Float32}, neighbour_pos::SVector{2, Float32},
+    compute_inserting_substrate_force_CUDA(agent_pos::SVector{2, Float32}, neighbour_pos::SVector{2, Float32},
                                            dims::SVector{2, Float32}, ideal_dist::Float32, 
                                            mu_attr::Float32, mu_rep::Float32, k_C::Float32)
 
 Compute the force between an inserting agent and the substrate agent it is inserting.
 """
-@inline function compute_inserting_substrate_force_metal(agent_pos::SVector{2, Float32}, neighbour_pos::SVector{2, Float32},
+@inline function compute_inserting_substrate_force_CUDA(agent_pos::SVector{2, Float32}, neighbour_pos::SVector{2, Float32},
                                            dims::SVector{2, Float32}, ideal_dist::Float32, 
                                            mu_attr::Float32, mu_rep::Float32, max_repulsion::Float32,
                                            rho::Float32, k_C::Float32) :: SVector{2, Float32}
@@ -408,7 +408,7 @@ Compute the force between an inserting agent and the substrate agent it is inser
     end
     
     #otherwise, compute vector and distance between agents
-    force_vec = shortest_vec_metal(agent_pos, neighbour_pos, dims)
+    force_vec = shortest_vec_CUDA(agent_pos, neighbour_pos, dims)
     dist = sqrt(force_vec[1]*force_vec[1] + force_vec[2]*force_vec[2])
 
     #catch the case where the actual distance is extremely small (avoid div by zero)

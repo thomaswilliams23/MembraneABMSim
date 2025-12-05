@@ -5,6 +5,7 @@ module MembraneABMSim
     using Accessors
     using CairoMakie
     using Colors
+    using CUDA
     using Distributions
     using GeometryBasics
     using JLD2
@@ -30,6 +31,13 @@ module MembraneABMSim
     include("metal/initialise_metal.jl")
     include("metal/other_position_updates_metal.jl")
     include("metal/utils_metal.jl")
+
+    include("cuda/cudaTypes.jl")
+    include("cuda/data_transfer_cuda.jl")
+    include("cuda/forces_cuda.jl")
+    include("cuda/initialise_cuda.jl")
+    include("cuda/other_position_updates_cuda.jl")
+    include("cuda/utils_cuda.jl")
 
     include("postprocessing/postprocessing_utils.jl")
     include("postprocessing/metrics.jl")

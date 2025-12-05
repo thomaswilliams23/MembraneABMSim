@@ -82,9 +82,6 @@ function rebuild_grid!(grid_size::GridSize, grid::SimGrid, agents::AllAgents, se
         end
     end
 
-    #reset num_agents_changed flag
-    grid_size.num_agents_changed = false
-
 end
 
 

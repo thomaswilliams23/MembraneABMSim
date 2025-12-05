@@ -9,6 +9,9 @@ objects to full OMP agents. Also updates polypeptide arrivals.
 """
 function update_BAM_subsystem!(agents::AllAgents, grid_size::GridSize, grid::SimGrid, system_flat::AllAgentsFlat, params::AllParams, t::Float64)
 
+    #keep track of nascent OMPs to delete after iteration
+    nascent_OMP_ixs_to_delete = Int[]
+
     #iterate over BamAs in random order
     for BamA in sample(agents.OMP.BamA, length(agents.OMP.BamA), replace=false)
 
@@ -97,7 +100,7 @@ function update_BAM_subsystem!(agents::AllAgents, grid_size::GridSize, grid::Sim
                     #if so, make a new nascent OMP on the edge of the BamA and update this BamA's state
                     if insertion_accepted
                         #make new nascent OMP and update agents and grid structures
-                        generate_nascent_OMP_obj!(agents, grid_size, BamA, t, params)
+                        generate_nascent_OMP_obj!(agents, grid_size, system_flat, BamA, t, params)
 
                         #update this BamA too
                         BamA.insertion_state = "embedding"
@@ -109,7 +112,6 @@ function update_BAM_subsystem!(agents::AllAgents, grid_size::GridSize, grid::Sim
 
                 #find the corresponding substrate (works because we only have a few nascent agents at a time)
                 #TODO improve?
-                nascent_OMP_ixs_to_delete = Int[]
                 for (nascent_OMP_ix, nascent_OMP) in enumerate(agents.nascent.nascent_OMP)
 
                     if nascent_OMP.inserting_agent_index == BamA.index
@@ -229,17 +231,18 @@ function update_BAM_subsystem!(agents::AllAgents, grid_size::GridSize, grid::Sim
                         break
                     end
                 end
-
-                #delete the nascent agents which have been promoted
-                deleteat!(agents.nascent.nascent_OMP, nascent_OMP_ixs_to_delete)
-
-                #now update identifiers of all nascent agents and their inserting agents (since their nascent_ix has changed)
-                if length(nascent_OMP_ixs_to_delete)>0
-                    update_flat_data_nascent_agents!(agents, system_flat)
-                    grid_size.nascent_promoted = true
-                end
             end
         end
+    end
+
+    #now update identifiers of all nascent agents and their inserting agents (since their nascent_ix has changed)
+    if length(nascent_OMP_ixs_to_delete)>0
+
+        #delete the nascent agents which have been promoted
+        deleteat!(agents.nascent.nascent_OMP, nascent_OMP_ixs_to_delete)
+
+        #update_flat_data_nascent_agents!(agents, system_flat)
+        grid_size.nascent_promoted = true
     end
 
     #now check for polypeptide arrivals
@@ -323,13 +326,13 @@ end
 
 
 """
-    generate_nascent_OMP_obj!(agents::AllAgents, grid_size::GridSize, BamA::BamAAgent, arrival_time::Float64, params::AllParams)
+    generate_nascent_OMP_obj!(agents::AllAgents, grid_size::GridSize, system_flat::AllAgentsFlat, BamA::BamAAgent, arrival_time::Float64, params::AllParams)
 
 Given an inserting BamA agent (and other relevant information), generates a new nascent OMP somewhere on the
 interior of the edge of the BamA and writes the new nascent OMP into the agents structure. Also updates total
 agent count in the grid object.
 """
-function generate_nascent_OMP_obj!(agents::AllAgents, grid_size::GridSize, BamA::BamAAgent, arrival_time::Float64, params::AllParams)
+function generate_nascent_OMP_obj!(agents::AllAgents, grid_size::GridSize, system_flat::AllAgentsFlat, BamA::BamAAgent, arrival_time::Float64, params::AllParams)
     
     #small perturbation to ensure BamA and its substrate are never in the exact same position (messes up forces)
     insertion_eps = 1e-6
@@ -375,6 +378,8 @@ function generate_nascent_OMP_obj!(agents::AllAgents, grid_size::GridSize, BamA:
         BamA.index
     )
 
+    #update the 
+
     #push to AllAgents structure
     push!(agents.nascent.nascent_OMP, new_nascent_OMP)
 
@@ -394,6 +399,9 @@ agents to full LPS agents.
 """
 function update_Lpt_subsystem!(agents::AllAgents, grid_size::GridSize, system_flat::AllAgentsFlat, params::AllParams, t::Float64)
 
+    #keep track of nascent LPSs to delete after iteration
+    nascent_LPS_ixs_to_delete = Int[]
+
     #loop LptDs
     for LptD in agents.OMP.LptD
 
@@ -405,6 +413,7 @@ function update_Lpt_subsystem!(agents::AllAgents, grid_size::GridSize, system_fl
                 LPS_arrival_dist = Poisson(params.LPS.arrival_rate * params.system.dt)
                 insert_new_LPS = (rand(LPS_arrival_dist)>0.0)
                 if insert_new_LPS
+
                     #make new nascent OMP and update agents and grid structures
                     generate_nascent_LPS_obj!(agents, grid_size, LptD, t, params)
 
@@ -415,7 +424,6 @@ function update_Lpt_subsystem!(agents::AllAgents, grid_size::GridSize, system_fl
             elseif LptD.insertion_state=="embedding"
 
                 #find substrate LPS (TODO: improve)
-                nascent_LPS_ixs_to_delete = Int[]
                 for nascent_LPS_ix = 1:length(agents.nascent.nascent_LPS)
                     nascent_LPS = agents.nascent.nascent_LPS[nascent_LPS_ix]
                     if nascent_LPS.inserting_agent_index == LptD.index
@@ -464,19 +472,20 @@ function update_Lpt_subsystem!(agents::AllAgents, grid_size::GridSize, system_fl
                     end
                 end
 
-                #delete the nascent agents which have been promoted
-                deleteat!(agents.nascent.nascent_LPS, nascent_LPS_ixs_to_delete)
-
-                #now update identifiers of all nascent agents and their inserting agents (since their nascent_ix has changed)
-                if length(nascent_LPS_ixs_to_delete)>0
-                    update_flat_data_nascent_agents!(agents, system_flat)
-                    grid_size.nascent_promoted = true
-                end
-
             end
-
         end
     end
+
+    #now update identifiers of all nascent agents and their inserting agents (since their nascent_ix has changed)
+    if length(nascent_LPS_ixs_to_delete)>0
+
+        #delete the nascent agents which have been promoted
+        deleteat!(agents.nascent.nascent_LPS, nascent_LPS_ixs_to_delete)
+
+        #update_flat_data_nascent_agents!(agents, system_flat)
+        grid_size.nascent_promoted = true
+    end
+
 end
 
 

@@ -1,0 +1,177 @@
+"""
+    update_nascent_promotion_CUDA!(all_data_CUDA::AllDataCUDA, system_flat_cpu::AllAgentsFlat, grid_size::GridSize)
+
+In the case where a nascent agent has been promoted, copy across all updated nascent-related data to the GPU.
+"""
+function update_nascent_promotion_CUDA!(all_data_CUDA::AllDataCUDA, system_flat_cpu::AllAgentsFlat, grid_size::GridSize)
+
+    #check that no GPU processes are ongoing
+    KernelAbstractions.synchronize(CUDABackend())
+
+    #update nascent to inserting indices
+    copyto!(all_data_CUDA.nascent_to_inserting_ixs, system_flat_cpu.nascent_to_inserting_ixs)
+    copyto!(all_data_CUDA.nascent_to_substrate_ixs, system_flat_cpu.nascent_to_substrate_ixs)
+    copyto!(all_data_CUDA.substrate_inserting_ideal_dists, system_flat_cpu.substrate_inserting_ideal_dists)
+
+    #update identifiers
+    copyto!(all_data_CUDA.identifiers, system_flat_cpu.identifiers[1:grid_size.num_agents])
+
+    #reset nascent_promoted flag
+    grid_size.nascent_promoted = false
+end
+
+
+"""
+    update_newly_tethered_agent_ixs_CUDA!(all_data_CUDA::AllDataCUDA, newly_tethered_agent_ixs::Vector{Int})
+
+In the case where agents have just become tethered, copy across their indices to the GPU.
+"""
+function update_newly_tethered_agent_ixs_CUDA!(all_data_CUDA::AllDataCUDA, newly_tethered_agent_ixs::Vector{Int})
+
+    #check that no GPU processes are ongoing
+    KernelAbstractions.synchronize(CUDABackend())
+
+    #handle resizing
+    curr_capacity = length(all_data_CUDA.newly_tethered_agent_ixs)
+    if length(newly_tethered_agent_ixs)>curr_capacity
+        size_increase_ratio = 1.25
+        new_vec_size = ceil(Int, size_increase_ratio*length(newly_tethered_agent_ixs))
+        all_data_CUDA.newly_tethered_agent_ixs = resize_CUDA(all_data_CUDA.newly_tethered_agent_ixs, curr_capacity, new_vec_size)
+    end
+
+    #copy across
+    copyto!(all_data_CUDA.newly_tethered_agent_ixs, newly_tethered_agent_ixs)
+
+end
+
+
+"""
+    copy_data_to_CUDA!(all_data_CUDA::AllDataCUDA, grid_size_CUDA::GridSizeCUDA, system_flat_cpu::AllAgentsFlat, grid_size::GridSize, grid::SimGrid)
+
+Copies agent and grid data from CPU to GPU, resizing buffers if needed.
+"""
+function copy_data_to_CUDA!(all_data_CUDA::AllDataCUDA, grid_size_CUDA::GridSizeCUDA, system_flat_cpu::AllAgentsFlat, grid_size::GridSize, grid::SimGrid)
+
+    #handle resizing
+    curr_agent_vec_capacity = length(all_data_CUDA.effective_radii)
+    curr_grid_vec_capacity = length(all_data_CUDA.num_agents_in_cell)
+    curr_nascent_capacity = length(all_data_CUDA.nascent_to_substrate_ixs)
+    if grid_size.num_agents>curr_agent_vec_capacity
+        size_increase_ratio = 1.25
+        new_agent_vec_size = ceil(Int, max(size_increase_ratio*curr_agent_vec_capacity, grid_size.num_agents))
+        all_data_CUDA.positions = resize_CUDA(all_data_CUDA.positions, 2*curr_agent_vec_capacity, 2*new_agent_vec_size)
+        all_data_CUDA.next_positions = resize_CUDA(all_data_CUDA.next_positions, 2*curr_agent_vec_capacity, 2*new_agent_vec_size)
+        all_data_CUDA.effective_radii = resize_CUDA(all_data_CUDA.effective_radii, curr_agent_vec_capacity, new_agent_vec_size)
+        all_data_CUDA.identifiers = resize_CUDA(all_data_CUDA.identifiers, curr_agent_vec_capacity, new_agent_vec_size)
+        all_data_CUDA.tether_points = resize_CUDA(all_data_CUDA.tether_points, 2*curr_agent_vec_capacity, 2*new_agent_vec_size)
+        all_data_CUDA.agg_dist_since_grid_sync = resize_CUDA(all_data_CUDA.agg_dist_since_grid_sync, curr_agent_vec_capacity, new_agent_vec_size)
+        all_data_CUDA.agent_cell_z_ixs = resize_CUDA(all_data_CUDA.agent_cell_z_ixs, curr_agent_vec_capacity, new_agent_vec_size)
+    end
+    if grid_size.tot_num_cells>curr_grid_vec_capacity
+        size_increase_ratio = 1.25
+        new_grid_vec_size = ceil(Int, max(size_increase_ratio*curr_grid_vec_capacity, grid_size.tot_num_cells))
+        all_data_CUDA.coords_to_z_ix = resize_CUDA(all_data_CUDA.coords_to_z_ix, curr_grid_vec_capacity, new_grid_vec_size)
+        all_data_CUDA.z_ix_to_coords = resize_CUDA(all_data_CUDA.z_ix_to_coords, 2*curr_grid_vec_capacity, 2*new_grid_vec_size)
+        all_data_CUDA.num_agents_in_cell = resize_CUDA(all_data_CUDA.num_agents_in_cell, curr_grid_vec_capacity, new_grid_vec_size)
+        all_data_CUDA.start_agents_in_cell = resize_CUDA(all_data_CUDA.start_agents_in_cell, curr_grid_vec_capacity, new_grid_vec_size)
+    end
+    if length(system_flat_cpu.nascent_to_substrate_ixs) > curr_nascent_capacity
+        size_increase_ratio = 1.25
+        new_vec_size = ceil(Int, max(size_increase_ratio * curr_nascent_capacity, length(system_flat_cpu.nascent_to_substrate_ixs)))
+        all_data_CUDA.nascent_to_substrate_ixs = resize_CUDA(all_data_CUDA.nascent_to_substrate_ixs, curr_nascent_capacity, new_vec_size)
+        all_data_CUDA.nascent_to_inserting_ixs = resize_CUDA(all_data_CUDA.nascent_to_inserting_ixs, curr_nascent_capacity, new_vec_size)
+        all_data_CUDA.substrate_inserting_ideal_dists = resize_CUDA(all_data_CUDA.substrate_inserting_ideal_dists, curr_nascent_capacity, new_vec_size)
+    end
+
+
+    #copy across flat system data
+    copyto!(all_data_CUDA.positions, system_flat_cpu.positions[1:2*grid_size.num_agents])
+    copyto!(all_data_CUDA.next_positions, system_flat_cpu.positions[1:2*grid_size.num_agents])
+    copyto!(all_data_CUDA.effective_radii, system_flat_cpu.effective_radii[1:grid_size.num_agents])
+    copyto!(all_data_CUDA.identifiers, system_flat_cpu.identifiers[1:grid_size.num_agents])
+    copyto!(all_data_CUDA.tether_points, system_flat_cpu.tether_points[1:2*grid_size.num_agents])
+    copyto!(all_data_CUDA.agg_dist_since_grid_sync, system_flat_cpu.agg_dist_since_grid_sync[1:grid_size.num_agents])
+
+    copyto!(all_data_CUDA.nascent_to_inserting_ixs, system_flat_cpu.nascent_to_inserting_ixs)
+    copyto!(all_data_CUDA.nascent_to_substrate_ixs, system_flat_cpu.nascent_to_substrate_ixs)
+    copyto!(all_data_CUDA.substrate_inserting_ideal_dists, system_flat_cpu.substrate_inserting_ideal_dists)
+
+    #copy across grid data
+    copyto!(all_data_CUDA.agent_cell_z_ixs, grid.agent_cell_z_ixs[1:grid_size.num_agents])
+    copyto!(all_data_CUDA.num_agents_in_cell, grid.num_agents_in_cell[1:grid_size.tot_num_cells])
+    copyto!(all_data_CUDA.start_agents_in_cell, grid.start_agents_in_cell[1:grid_size.tot_num_cells])
+
+    #update grid CUDA data (CPU-bound)
+    grid_size_CUDA.dims = Float32.(grid_size.dims)
+    grid_size_CUDA.num_agents = grid_size.num_agents
+
+    #morton lookup tables and grid size only need updating if grid has been resized
+    if grid_size.grid_size_changed
+        copyto!(all_data_CUDA.coords_to_z_ix, grid.coords_to_z_ix[1:grid_size.tot_num_cells])
+        copyto!(all_data_CUDA.z_ix_to_coords, grid.z_ix_to_coords[1:2*grid_size.tot_num_cells])
+        grid_size_CUDA.num_cells = grid_size.num_cells
+        grid_size_CUDA.tot_num_cells = grid_size.tot_num_cells
+        grid_size.grid_size_changed = false
+    end
+
+end
+
+
+
+
+"""
+    copy_data_to_cpu!(system_flat_cpu::AllAgentsFlat, agents::AllAgents, all_data_CUDA::AllDataCUDA)
+
+Copies position and aggregate distance data from GPU to CPU.
+"""
+function copy_data_to_cpu_from_CUDA!(system_flat_cpu::AllAgentsFlat, agents::AllAgents, all_data_CUDA::AllDataCUDA, grid_size_CUDA::GridSizeCUDA)
+
+    #make sure all previous GPU operations are complete
+    KernelAbstractions.synchronize(CUDABackend())
+
+    #copy the new positions and aggregate distances out to the cpu
+    copyto!(system_flat_cpu.positions, all_data_CUDA.next_positions[1:2*grid_size_CUDA.num_agents])
+    copyto!(system_flat_cpu.agg_dist_since_grid_sync, all_data_CUDA.agg_dist_since_grid_sync[1:grid_size_CUDA.num_agents])
+    copyto!(system_flat_cpu.tether_points, all_data_CUDA.tether_points[1:2*grid_size_CUDA.num_agents])
+    
+    #write new positions into AllAgents structure
+    all_agents = Iterators.flatten((agents.OMP.OmpA, agents.OMP.OmpCF, agents.OMP.LptD, agents.OMP.BamA, 
+                                    agents.LPS, agents.nascent.nascent_OMP, agents.nascent.nascent_LPS))
+    for agent in all_agents
+        agent_ix = agent.index
+        if agent_ix>grid_size_CUDA.num_agents
+            continue
+        end
+        sorted_ix = system_flat_cpu.agent_ix_to_sorted_ix[agent_ix]
+        agent.position = SVector{2, Float64}(system_flat_cpu.positions[2*sorted_ix-1], system_flat_cpu.positions[2*sorted_ix])
+    end
+
+    #now iterate through all tethered agents and update their tether points
+    all_tetherable_agents = Iterators.flatten((agents.OMP.OmpA, agents.OMP.LptD))
+    for agent in all_tetherable_agents
+        if agent.is_tethered
+            agent_ix = agent.index
+            if agent_ix>grid_size_CUDA.num_agents
+                continue
+            end
+            sorted_ix = system_flat_cpu.agent_ix_to_sorted_ix[agent_ix]
+            agent.tether_point = SVector{2, Float64}(
+                system_flat_cpu.tether_points[2*sorted_ix-1], 
+                system_flat_cpu.tether_points[2*sorted_ix]
+            )
+        end
+    end
+end
+
+
+
+"""
+    resize_CUDA!(cuda_vec, curr_size::Int, new_size::Int)
+
+Resizes a CuDeviceVector to a new size, preserving existing data. Avoids fragmentation.
+"""
+@inline function resize_CUDA(cuda_vec::CuArray{T, 1, CUDA.DeviceMemory}, curr_size::Int, new_size::Int) where T <: Union{Float32, Int}
+    new_buffer = similar(cuda_vec, new_size)
+    copyto!(new_buffer, cuda_vec[1:curr_size])
+    return new_buffer
+end

@@ -180,3 +180,47 @@ Recovers agent properties from compact identifier.
     agent_type = num_to_agent_type[identifier]
     return is_tethered, agent_type, is_nascent, is_inserting, nascent_ix
 end
+
+
+
+"""
+    copy_data_to_cpu_yn(agents::AllAgents, t::Float64)
+
+Decides whether to copy data back to CPU this time step based on agent types and current time.
+"""
+function copy_data_to_cpu_yn(BamA_agents::Vector{BamAAgent}, params::AllParams, t::Float64)
+
+    t_next_time_step = t + params.system.dt
+
+    #first check if there is a BamA in the bound state, and we will attempt insertion on the next time step
+    attempt_dt_err = 0.1 * params.system.dt
+    if abs(t_next_time_step/params.insertion.attempt_dt - round(t_next_time_step/params.insertion.attempt_dt))<attempt_dt_err
+        for BamA in BamA_agents
+            if BamA.insertion_state == "bound"
+                return true
+            end
+        end
+    end
+
+    #next check if we need to copy data out for visualisation this time step
+    time_err = 0.1 * params.system.dt
+    if abs(t_next_time_step/params.system.vis_dt - round(t_next_time_step/params.system.vis_dt))<time_err
+        return true
+    end
+
+    return false
+
+end
+
+
+
+"""
+    fast_floor_int32(x::Float32):: Int32
+
+Efficiently computes the floor of a Float32 value and returns it as Int32. GPU-safe.
+"""
+@inline function fast_floor_int32(x::Float32):: Int32
+    i = unsafe_trunc(Int32, x)        # GPU-safe, direct LLVM fptosi
+    i -= (x < Float32(i))             # subtract 1 if x < i (emulates floor)
+    return i
+end

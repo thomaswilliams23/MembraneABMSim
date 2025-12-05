@@ -1,26 +1,26 @@
 """
-    compute_non_force_position_changes!(non_force_position_kernel, agents::AllAgents, all_data_metal::AllDataMetal,
-                                       grid_size::GridSize, grid_size_metal::GridSizeMetal,
-                                       effective_rad_incs_metal::SVector{7, Float32},
-                                       ideal_dist_incs_metal::SVector{7, Float32},
+    compute_non_force_position_changes!(non_force_position_kernel, agents::AllAgents, all_data_CUDA::AllDataCUDA,
+                                       grid_size::GridSize, grid_size_CUDA::GridSizeCUDA,
+                                       effective_rad_incs_CUDA::SVector{7, Float32},
+                                       ideal_dist_incs_CUDA::SVector{7, Float32},
                                        nascent_added_area_lookup::NascentAddedAreaLookup,
                                        newly_tethered_agent_ixs::Vector{Int},
                                        params::AllParams, t::Float64)
 
-Applies non-force-driven changes to agent positions using a Metal GPU kernel. Specifically, this handles:
+Applies non-force-driven changes to agent positions using a CUDA GPU kernel. Specifically, this handles:
  - rescaling of positions due to domain size change
  - formation of new tethers
  - updating nascent-inserting ideal distances
  - updating effective radii of nascent agents
 """
-function compute_non_force_position_changes_metal!(
+function compute_non_force_position_changes_CUDA!(
     non_force_position_kernel,
     agents::AllAgents,
-    all_data_metal::AllDataMetal,
+    all_data_CUDA::AllDataCUDA,
     grid_size::GridSize,
-    grid_size_metal::GridSizeMetal,
-    effective_rad_incs_metal::SVector{7, Float32},
-    ideal_dist_incs_metal::SVector{7, Float32},
+    grid_size_CUDA::GridSizeCUDA,
+    effective_rad_incs_CUDA::SVector{7, Float32},
+    ideal_dist_incs_CUDA::SVector{7, Float32},
     nascent_added_area_lookup::NascentAddedAreaLookup,
     newly_tethered_agent_ixs::Vector{Int},
     params::AllParams,
@@ -29,10 +29,10 @@ function compute_non_force_position_changes_metal!(
 
 
     #make sure all previous GPU operations are complete
-    KernelAbstractions.synchronize(MetalBackend())
+    KernelAbstractions.synchronize(CUDABackend())
 
     #update positions field on GPU
-    copyto!(all_data_metal.positions, all_data_metal.next_positions[1:2*grid_size_metal.num_agents])
+    copyto!(all_data_CUDA.positions, all_data_CUDA.next_positions[1:2*grid_size_CUDA.num_agents])
 
 
     #first, compute the added area
@@ -48,7 +48,7 @@ function compute_non_force_position_changes_metal!(
     prev_area = prod(grid_size.dims)
     scaled_added_area = added_area_this_timestep/params.system.density
     scale_factor = sqrt((prev_area + scaled_added_area)/prev_area)
-    scale_factor_metal = Float32(scale_factor)
+    scale_factor_CUDA = Float32(scale_factor)
 
     #now, call the kernel on all agents (GPU)
     #this has to account for
@@ -57,25 +57,25 @@ function compute_non_force_position_changes_metal!(
     # - updating nascent-inserting ideal distances (already done on CPU)
     # - updating effective radii of nascent agents (already done on CPU)
     num_newly_tethered = length(newly_tethered_agent_ixs)
-    non_force_position_kernel_metal!(
-        all_data_metal.positions,
-        all_data_metal.next_positions,
-        all_data_metal.effective_radii,
-        all_data_metal.identifiers,
-        all_data_metal.tether_points,
-        all_data_metal.substrate_inserting_ideal_dists,
-        all_data_metal.newly_tethered_agent_ixs,
-        grid_size_metal.dims,
-        effective_rad_incs_metal,
-        ideal_dist_incs_metal,
-        scale_factor_metal,
+    non_force_position_kernel(
+        all_data_CUDA.positions,
+        all_data_CUDA.next_positions,
+        all_data_CUDA.effective_radii,
+        all_data_CUDA.identifiers,
+        all_data_CUDA.tether_points,
+        all_data_CUDA.substrate_inserting_ideal_dists,
+        all_data_CUDA.newly_tethered_agent_ixs,
+        grid_size_CUDA.dims,
+        effective_rad_incs_CUDA,
+        ideal_dist_incs_CUDA,
+        scale_factor_CUDA,
         num_newly_tethered;
-        ndrange=grid_size_metal.num_agents
+        ndrange=grid_size_CUDA.num_agents
     )
 
     #change dims etc HERE (not before kernel call)
     grid_size.dims *= scale_factor
-    grid_size_metal.dims *= scale_factor_metal
+    grid_size_CUDA.dims *= scale_factor_CUDA
 
 end
 
@@ -84,13 +84,13 @@ end
 
 """
     function _non_force_position_kernel!(
-        positions::MtlDeviceVector{Float32},
-        next_positions::MtlDeviceVector{Float32},
-        effective_radii::MtlDeviceVector{Float32},
-        identifiers::MtlDeviceVector{Int},
-        tether_points::MtlDeviceVector{Float32},
-        substrate_inserting_ideal_dists::MtlDeviceVector{Float32},
-        newly_tethered_agent_ixs::MtlDeviceVector{Int},
+        positions::CuDeviceVector{Float32},
+        next_positions::CuDeviceVector{Float32},
+        effective_radii::CuDeviceVector{Float32},
+        identifiers::CuDeviceVector{Int},
+        tether_points::CuDeviceVector{Float32},
+        substrate_inserting_ideal_dists::CuDeviceVector{Float32},
+        newly_tethered_agent_ixs::CuDeviceVector{Int},
         dims::SVector{2, Float32},
         effective_rad_incs::SVector{7, Float32},
         ideal_dist_incs::SVector{7, Float32},
@@ -98,16 +98,16 @@ end
         num_newly_tethered::Int
     )
 
-Metal GPU kernel for computing non-force position changes.
+CUDA GPU kernel for computing non-force position changes.
 """
-@kernel function _non_force_position_kernel_metal!(
-    positions::MtlDeviceVector{Float32},
-    next_positions::MtlDeviceVector{Float32},
-    effective_radii::MtlDeviceVector{Float32},
-    identifiers::MtlDeviceVector{Int},
-    tether_points::MtlDeviceVector{Float32},
-    substrate_inserting_ideal_dists::MtlDeviceVector{Float32},
-    newly_tethered_agent_ixs::MtlDeviceVector{Int},
+@kernel function _non_force_position_kernel_CUDA!(
+    positions::CuDeviceVector{Float32},
+    next_positions::CuDeviceVector{Float32},
+    effective_radii::CuDeviceVector{Float32},
+    identifiers::CuDeviceVector{Int},
+    tether_points::CuDeviceVector{Float32},
+    substrate_inserting_ideal_dists::CuDeviceVector{Float32},
+    newly_tethered_agent_ixs::CuDeviceVector{Int},
     dims::SVector{2, Float32},
     effective_rad_incs::SVector{7, Float32},
     ideal_dist_incs::SVector{7, Float32},
@@ -119,7 +119,7 @@ Metal GPU kernel for computing non-force position changes.
     sorted_ix = @index(Global)
 
     # parse this agent's identifier
-    agent_data = parse_identifier_metal(identifiers[sorted_ix])
+    agent_data = parse_identifier_CUDA(identifiers[sorted_ix])
     is_tethered = agent_data[1]
     agent_type_num = agent_data[2]
     is_nascent = agent_data[3]
@@ -147,7 +147,7 @@ Metal GPU kernel for computing non-force position changes.
 
     # compute new position and tether position due to domain rescaling
     if is_tethered==1
-        agent_to_tether_vec = shortest_vec_metal(
+        agent_to_tether_vec = shortest_vec_CUDA(
             SVector{2, Float32}(positions[2*sorted_ix-1], positions[2*sorted_ix]),
             SVector{2, Float32}(tether_points[2*sorted_ix-1], tether_points[2*sorted_ix]),
             dims

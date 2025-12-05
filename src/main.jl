@@ -24,10 +24,13 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false, sup
     #determine device to use
     device = "cpu"
     if params.system.device == "metal"
-        if !suppress_prints
-            println("Running on Metal GPU")
-        end
+        @assert Metal.functional() "Metal device specified but no Metal-compatible GPU found."
+        println("Running on Metal GPU")
         device = "metal"
+    elseif params.system.device == "cuda"
+        @assert CUDA.has_cuda() "CUDA device specified but no CUDA-compatible GPU found."
+        println("Running on CUDA GPU")
+        device = "cuda"
     elseif params.system.device == "cpu"
         if !suppress_prints
             println("Running on CPU")
@@ -66,6 +69,20 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false, sup
         ) = initialise_system_metal(params; clear_existing_output=clear_existing_output, suppress_prints=suppress_prints)
         effective_rad_incs_metal = Float32.(effective_rad_incs)
         ideal_dist_incs_metal = Float32.(ideal_dist_incs)
+    elseif device=="cuda"
+        (
+            non_force_position_kernel,
+            force_kernel, 
+            agents, 
+            grid_size, 
+            grid, 
+            system_flat_cpu, 
+            all_data_CUDA, 
+            grid_size_CUDA, 
+            params_CUDA
+        ) = initialise_system_CUDA(params; clear_existing_output=clear_existing_output)
+        effective_rad_incs_CUDA = Float32.(effective_rad_incs)
+        ideal_dist_incs_CUDA = Float32.(ideal_dist_incs)
     end
 
 
@@ -94,7 +111,9 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false, sup
 
             #if using metal, copy data back to CPU to rebuild grid
             if device=="metal"
-                copy_data_to_cpu!(system_flat_cpu, agents, all_data_metal, grid_size_metal)
+                copy_data_to_cpu_from_metal!(system_flat_cpu, agents, all_data_metal, grid_size_metal)
+            elseif device=="cuda"
+                copy_data_to_cpu_from_CUDA!(system_flat_cpu, agents, all_data_CUDA, grid_size_CUDA)
             end
 
             #rebuild grid and flat data structures
@@ -105,15 +124,29 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false, sup
             #if using metal, copy data to GPU
             if device=="metal"
                 copy_data_to_metal!(all_data_metal, grid_size_metal, system_flat_cpu, grid_size, grid)
+            elseif device=="cuda"
+                copy_data_to_CUDA!(all_data_CUDA, grid_size_CUDA, system_flat_cpu, grid_size, grid)
             end
 
             steps_since_grid_sync = 0
+            grid_size.num_agents_changed = false
         end
 
-        #if any nascent agents have been promoted, need to update flat data structure on gpu
-        if device=="metal" && grid_size.nascent_promoted
-            update_nascent_promotion_metal!(all_data_metal, system_flat_cpu, grid_size)
+        #if any nascent agents have been promoted, need to update flat data structure and pass to gpu
+        if grid_size.nascent_promoted
+
+            update_flat_data_nascent_agents!(agents, system_flat_cpu)
+
+            #if using metal, update nascent promotion on GPU
+            if device=="metal"
+                update_nascent_promotion_metal!(all_data_metal, system_flat_cpu, grid_size)
+            elseif device=="cuda"
+                update_nascent_promotion_CUDA!(all_data_CUDA, system_flat_cpu, grid_size)
+            end
+
+            grid_size.nascent_promoted = false
         end
+
 
         #check for any new tethering or assembly
         newly_tethered_agent_ixs = update_tethering_and_assembly!(agents, system_flat_cpu, params)
@@ -121,6 +154,8 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false, sup
         #if using metal, update newly tethered agent ixs on GPU
         if device=="metal" && length(newly_tethered_agent_ixs)>0
             update_newly_tethered_agent_ixs_metal!(all_data_metal, newly_tethered_agent_ixs)
+        elseif device=="cuda" && length(newly_tethered_agent_ixs)>0
+            update_newly_tethered_agent_ixs_CUDA!(all_data_CUDA, newly_tethered_agent_ixs)
         end
 
         #update any nascent agents
@@ -143,6 +178,20 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false, sup
                 params, 
                 t
             )
+        elseif device=="cuda"
+            compute_non_force_position_changes_CUDA!(
+                non_force_position_kernel, 
+                agents, 
+                all_data_CUDA, 
+                grid_size, 
+                grid_size_CUDA, 
+                effective_rad_incs_CUDA, 
+                ideal_dist_incs_CUDA, 
+                nascent_added_area_lookup, 
+                newly_tethered_agent_ixs, 
+                params, 
+                t
+            )
         end
 
 
@@ -151,7 +200,9 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false, sup
 
             #if using metal, copy data back to CPU to rebuild grid
             if device=="metal"
-                copy_data_to_cpu!(system_flat_cpu, agents, all_data_metal, grid_size_metal)
+                copy_data_to_cpu_from_metal!(system_flat_cpu, agents, all_data_metal, grid_size_metal)
+            elseif device=="cuda"
+                copy_data_to_cpu_from_CUDA!(system_flat_cpu, agents, all_data_CUDA, grid_size_CUDA)
             end
 
             #rebuild grid and flat data structures
@@ -162,6 +213,8 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false, sup
             #if using metal, copy data to GPU
             if device=="metal"
                 copy_data_to_metal!(all_data_metal, grid_size_metal, system_flat_cpu, grid_size, grid)
+            elseif device=="cuda"
+                copy_data_to_CUDA!(all_data_CUDA, grid_size_CUDA, system_flat_cpu, grid_size, grid)
             end
 
             steps_since_grid_sync = 0
@@ -178,7 +231,13 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false, sup
             resolve_forces_metal!(force_kernel, all_data_metal, grid_size_metal, params_metal)
             copy_data_to_cpu = copy_data_to_cpu_yn(agents.OMP.BamA, params, t)
             if copy_data_to_cpu
-                copy_data_to_cpu!(system_flat_cpu, agents, all_data_metal, grid_size_metal)
+                copy_data_to_cpu_from_metal!(system_flat_cpu, agents, all_data_metal, grid_size_metal)
+            end
+        elseif device=="cuda"
+            resolve_forces_CUDA!(force_kernel, all_data_CUDA, grid_size_CUDA, params_CUDA)
+            copy_data_to_cpu = copy_data_to_cpu_yn(agents.OMP.BamA, params, t)
+            if copy_data_to_cpu
+                copy_data_to_cpu_from_CUDA!(system_flat_cpu, agents, all_data_CUDA, grid_size_CUDA)
             end
         end
 

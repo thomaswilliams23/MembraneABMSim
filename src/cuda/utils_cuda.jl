@@ -1,9 +1,9 @@
 """
-    shortest_vec_metal(pos1::SVector{2, Float32}, pos2::SVector{2, Float32}, dims::SVector{2, Float32}) :: SVector{2, Float32}
+    shortest_vec_CUDA(pos1::SVector{2, Float32}, pos2::SVector{2, Float32}, dims::SVector{2, Float32}) :: SVector{2, Float32}
 
 Returns the shortest vector between two positions, accounting for periodic boundaries.
 """
-@inline function shortest_vec_metal(pos1::SVector{2, Float32}, pos2::SVector{2, Float32}, dims::SVector{2, Float32}) :: SVector{2, Float32}
+@inline function shortest_vec_CUDA(pos1::SVector{2, Float32}, pos2::SVector{2, Float32}, dims::SVector{2, Float32}) :: SVector{2, Float32}
     raw_vec = pos2 - pos1
     # Replace broadcast operations with component-wise
     wrapped_vec = SVector{2, Float32}(
@@ -15,23 +15,23 @@ end
 
 
 """
-    shortest_distance_metal(pos1::SVector{2, Float32}, pos2::SVector{2, Float32}, dims::SVector{2, Float32}) :: Float32
+    shortest_distance_CUDA(pos1::SVector{2, Float32}, pos2::SVector{2, Float32}, dims::SVector{2, Float32}) :: Float32
 
 Returns the shortest distance between two positions, accounting for periodic boundaries.
 """
-@inline function shortest_distance_metal(pos1::SVector{2, Float32}, pos2::SVector{2, Float32}, dims::SVector{2, Float32}) :: Float32
-    vec = shortest_vec_metal(pos1, pos2, dims)
+@inline function shortest_distance_CUDA(pos1::SVector{2, Float32}, pos2::SVector{2, Float32}, dims::SVector{2, Float32}) :: Float32
+    vec = shortest_vec_CUDA(pos1, pos2, dims)
     return sqrt(vec[1]*vec[1] + vec[2]*vec[2])
 end
 
 
 """
-    parse_identifier_metal(identifier::Int)
+    parse_identifier_CUDA(identifier::Int)
 
-Parses an agent identifier integer into its constituent properties for Metal GPU kernels.
+Parses an agent identifier integer into its constituent properties for CUDA GPU kernels.
 Returns a SVector of agent properties.
 """
-@inline function parse_identifier_metal(identifier::Int)
+@inline function parse_identifier_CUDA(identifier::Int)
 
     is_tethered = identifier < 0
     if is_tethered
