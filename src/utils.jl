@@ -224,11 +224,3 @@ Efficiently computes the floor of a Float32 value and returns it as Int32. GPU-s
     i -= (x < Float32(i))             # subtract 1 if x < i (emulates floor)
     return i
 end
-
-
-
-@inline function timed_sync_CUDA(msg::String)
-    #t = time()
-    KernelAbstractions.synchronize(CUDABackend())
-    #println("SYNC: $(msg) took $(round((time()-t)*1000, digits=3)) ms")
-end
