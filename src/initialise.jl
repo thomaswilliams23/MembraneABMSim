@@ -2,7 +2,7 @@
 
 
 """
-    initialise_system(params::AllParams; clear_existing_output::Bool=false)
+    initialise_system(params::AllParams; clear_existing_output::Bool=false, suppress_prints::Bool=false)
 
 Initialises a simulation based on the parameter structure passed in. Depending on the initialisation
 type specified in the parameter structure, calls a helper function to assemble the system.
@@ -16,15 +16,17 @@ Output:
 )
 
 """
-function initialise_system_cpu(params::AllParams; clear_existing_output::Bool=false)
+function initialise_system_cpu(params::AllParams; clear_existing_output::Bool=false, suppress_prints::Bool=false)
 
     # set up output directory structure
     set_up_output_directory(params.system.output_dir; clear_existing_output=clear_existing_output)
 
     # decide which initialisation to use
     if params.init.method == "random"
-        println("Initialising model with random distribution of agents...")
-        agents, grid_size, grid, system_flat_cpu = initialise_system_random(params)
+        if !suppress_prints
+            println("Initialising model with random distribution of agents...")
+        end
+        agents, grid_size, grid, system_flat_cpu = initialise_system_random(params; suppress_prints=suppress_prints)
     else
         #TODO: implement other initialisation methods?
         error("Initialisation type $(params.initialisation.init_type) not recognised.")
@@ -462,7 +464,7 @@ end
 Initialises a simulation with agents randomly placed within the domain. Runs equilibration 
 to resolve forces.
 """
-function initialise_system_random(params::AllParams)
+function initialise_system_random(params::AllParams; suppress_prints::Bool=false)
 
     #initialise simulation objects
     grid_size, grid = initialise_grid(params)
@@ -499,10 +501,14 @@ function initialise_system_random(params::AllParams)
 
         #report time
         if abs(t/params.system.vis_dt - round(t/params.system.vis_dt))<time_err
-            @printf "Running equilibration: τ=%5.2f\r" t
+            if !suppress_prints
+                @printf "Running equilibration: τ=%5.2f\r" t
+            end
         end
     end
-    println("\nEquilibration complete.")
+    if !suppress_prints
+        println("\nEquilibration complete.")
+    end
 
     #if specified, set all agents as assembled/tethered
     if params.init.complexes_assembled

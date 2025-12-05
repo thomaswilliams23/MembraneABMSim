@@ -12,7 +12,7 @@ function resolve_forces_cpu!(agents::AllAgents, grid_size::GridSize, grid::SimGr
     max_agg_dist = maximum(system_flat.agg_dist_since_grid_sync)
     
     # write new positions vector (iteration order keeps nearby agents together)
-    Threads.@threads for sorted_ix = 1:grid_size.num_agents
+    for sorted_ix = 1:grid_size.num_agents
         next_position_this_agent = compute_next_position(
             sorted_ix,
             system_flat,
