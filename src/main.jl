@@ -169,7 +169,7 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false, sup
         if device=="cpu"
             rescale_domain!(agents, system_flat_cpu, grid_size, params, nascent_added_area_lookup, t)
         elseif device=="metal"
-            compute_non_force_position_changes!(
+            compute_non_force_position_changes_metal!(
                 non_force_position_kernel, 
                 agents, 
                 all_data_metal, 

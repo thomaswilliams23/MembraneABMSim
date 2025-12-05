@@ -57,7 +57,7 @@ function compute_non_force_position_changes_metal!(
     # - updating nascent-inserting ideal distances (already done on CPU)
     # - updating effective radii of nascent agents (already done on CPU)
     num_newly_tethered = length(newly_tethered_agent_ixs)
-    non_force_position_kernel_metal!(
+    non_force_position_kernel(
         all_data_metal.positions,
         all_data_metal.next_positions,
         all_data_metal.effective_radii,
