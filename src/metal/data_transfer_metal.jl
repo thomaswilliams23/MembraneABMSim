@@ -36,7 +36,7 @@ function update_newly_tethered_agent_ixs_metal!(all_data_metal::AllDataMetal, ne
     if length(newly_tethered_agent_ixs)>curr_capacity
         size_increase_ratio = 1.25
         new_vec_size = ceil(Int, size_increase_ratio*length(newly_tethered_agent_ixs))
-        resize!(all_data_metal.newly_tethered_agent_ixs, new_vec_size)
+        all_data_metal.newly_tethered_agent_ixs = resize_metal(all_data_metal.newly_tethered_agent_ixs, curr_capacity, new_vec_size)
     end
 
     #copy across
@@ -59,28 +59,28 @@ function copy_data_to_metal!(all_data_metal::AllDataMetal, grid_size_metal::Grid
     if grid_size.num_agents>curr_agent_vec_capacity
         size_increase_ratio = 1.25
         new_agent_vec_size = ceil(Int, size_increase_ratio*grid_size.num_agents)
-        resize!(all_data_metal.positions, 2*new_agent_vec_size)
-        resize!(all_data_metal.next_positions, 2*new_agent_vec_size)
-        resize!(all_data_metal.effective_radii, new_agent_vec_size)
-        resize!(all_data_metal.identifiers, new_agent_vec_size)
-        resize!(all_data_metal.tether_points, 2*new_agent_vec_size)
-        resize!(all_data_metal.agg_dist_since_grid_sync, new_agent_vec_size)
-        resize!(all_data_metal.agent_cell_z_ixs, new_agent_vec_size)
+        all_data_metal.positions = resize_metal(all_data_metal.positions, 2*curr_agent_vec_capacity, 2*new_agent_vec_size)
+        all_data_metal.next_positions = resize_metal(all_data_metal.next_positions, 2*curr_agent_vec_capacity, 2*new_agent_vec_size)
+        all_data_metal.effective_radii = resize_metal(all_data_metal.effective_radii, curr_agent_vec_capacity, new_agent_vec_size)
+        all_data_metal.identifiers = resize_metal(all_data_metal.identifiers, curr_agent_vec_capacity, new_agent_vec_size)
+        all_data_metal.tether_points = resize_metal(all_data_metal.tether_points, 2*curr_agent_vec_capacity, 2*new_agent_vec_size)
+        all_data_metal.agg_dist_since_grid_sync = resize_metal(all_data_metal.agg_dist_since_grid_sync, curr_agent_vec_capacity, new_agent_vec_size)
+        all_data_metal.agent_cell_z_ixs = resize_metal(all_data_metal.agent_cell_z_ixs, curr_agent_vec_capacity, new_agent_vec_size)
     end
     if grid_size.tot_num_cells>curr_grid_vec_capacity
         size_increase_ratio = 1.25
         new_grid_vec_size = ceil(Int, size_increase_ratio*grid_size.tot_num_cells)
-        resize!(all_data_metal.coords_to_z_ix, new_grid_vec_size)
-        resize!(all_data_metal.z_ix_to_coords, 2*new_grid_vec_size)
-        resize!(all_data_metal.num_agents_in_cell, new_grid_vec_size)
-        resize!(all_data_metal.start_agents_in_cell, new_grid_vec_size)
+        all_data_metal.coords_to_z_ix = resize_metal(all_data_metal.coords_to_z_ix, curr_grid_vec_capacity, new_grid_vec_size)
+        all_data_metal.z_ix_to_coords = resize_metal(all_data_metal.z_ix_to_coords, 2*curr_grid_vec_capacity, 2*new_grid_vec_size)
+        all_data_metal.num_agents_in_cell = resize_metal(all_data_metal.num_agents_in_cell, curr_grid_vec_capacity, new_grid_vec_size)
+        all_data_metal.start_agents_in_cell = resize_metal(all_data_metal.start_agents_in_cell, curr_grid_vec_capacity, new_grid_vec_size)
     end
     if length(system_flat_cpu.nascent_to_substrate_ixs) > curr_nascent_capacity
         size_increase_ratio = 1.25
         new_vec_size = ceil(Int, size_increase_ratio * length(system_flat_cpu.nascent_to_substrate_ixs))
-        resize!(all_data_metal.nascent_to_substrate_ixs, new_vec_size)
-        resize!(all_data_metal.nascent_to_inserting_ixs, new_vec_size)
-        resize!(all_data_metal.substrate_inserting_ideal_dists, new_vec_size)
+        all_data_metal.nascent_to_substrate_ixs = resize_metal(all_data_metal.nascent_to_substrate_ixs, curr_nascent_capacity, new_vec_size)
+        all_data_metal.nascent_to_inserting_ixs = resize_metal(all_data_metal.nascent_to_inserting_ixs, curr_nascent_capacity, new_vec_size)
+        all_data_metal.substrate_inserting_ideal_dists = resize_metal(all_data_metal.substrate_inserting_ideal_dists, curr_nascent_capacity, new_vec_size)
     end
 
 
@@ -162,4 +162,16 @@ function copy_data_to_cpu_from_metal!(system_flat_cpu::AllAgentsFlat, agents::Al
             )
         end
     end
+end
+
+
+"""
+    resize_metal(metal_vec, curr_size::Int, new_size::Int)
+
+Resizes a metal vector to a new size, preserving existing data. Avoids fragmentation.
+"""
+@inline function resize_metal(metal_vec::MtlVector{T, Metal.PrivateStorage}, curr_size::Int, new_size::Int) where T <: Union{Float32, Int}
+    new_buffer = similar(metal_vec, new_size)
+    copyto!(new_buffer, metal_vec[1:curr_size])
+    return new_buffer
 end
