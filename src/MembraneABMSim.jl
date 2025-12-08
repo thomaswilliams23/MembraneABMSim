@@ -41,6 +41,7 @@ module MembraneABMSim
 
     include("postprocessing/postprocessing_utils.jl")
     include("postprocessing/metrics.jl")
+    include("postprocessing/vis_membrane.jl")
 
     include("biology.jl")
     include("initialise.jl")
@@ -51,6 +52,5 @@ module MembraneABMSim
     include("sweep.jl")
     include("update_grid.jl")
     include("utils.jl")
-    include("vis_membrane.jl")
 
 end # module MembraneABMSim
