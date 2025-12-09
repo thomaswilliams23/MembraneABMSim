@@ -337,7 +337,7 @@ function make_membrane_movie(out_path::String;
     movie_path = joinpath("out", out_path, "sim.mp4")
 
     #loop over each output data file and generate a snapshot for the movie
-    record(fig, movie_path, 0:num_time_steps; framerate=fps) do time_ix
+    Makie.record(fig, movie_path, 0:num_time_steps; framerate=fps) do time_ix
 
         print("Rendering frame $time_ix of $num_time_steps\r")
         
