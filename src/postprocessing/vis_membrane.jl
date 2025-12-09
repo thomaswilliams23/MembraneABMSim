@@ -439,3 +439,213 @@ function make_membrane_movie(out_path::String;
     println("\nDone!")
 end
 
+
+
+"""
+    make_snapshot(out_path::String, time_val::Float64; centering::Union{Tuple{String, Int}, Nothing}=nothing)
+
+Given an `out_path` - which must be a directory within the `out` directory - makes a snapshot
+of the simulation data in `out_path/raw_data` at time value `time_val`.
+"""
+function make_snapshot(out_path::String, time_val::Float64;
+    centering::Union{Tuple{String, Int}, Nothing}=nothing,
+    max_dims::Union{SVector{2, Float64}, Nothing}=nothing
+    )
+
+    #check that the out_path exists and contains data
+    raw_data_dir = joinpath("out", out_path, "raw_data")
+    if !isdir(raw_data_dir)
+        error("Can't find output directory $raw_data_dir")
+    end
+    if isempty(readdir(raw_data_dir))
+        error("Data directory exists, but is empty.")
+    end
+
+    #read in the copy of the config in the out_path
+    config_path = joinpath("out", out_path, "config.json")
+    params = parse_config(config_path)
+
+    #find the maximum dimensions (final data file)
+    if isnothing(max_dims)
+        num_time_steps = round(Int, params.system.t_max/params.system.vis_dt)
+        final_data_fname = joinpath("out", out_path, "raw_data", "sys_data_$(num_time_steps).jld2")
+        @load final_data_fname dims
+        max_dims = dims
+    end
+
+    #load in data for this time step
+    time_ix = round(Int, time_val / params.system.vis_dt)
+    time_val = time_ix * params.system.vis_dt
+    data_fname = joinpath("out", out_path, "raw_data", "sys_data_$(time_ix).jld2")
+    @load data_fname agents dims
+
+    #optionally centre everything around a specific agent
+    if !isnothing(centering)
+        centre_all_agents!(agents, centering[1], centering[2], dims)
+    end
+
+    #get agent representations for this time step
+    (
+        membrane_obj, 
+        agent_x_coords, 
+        agent_y_coords, 
+        agent_radii, 
+        agent_colours,
+        insertion_states,
+        tether_x_coords,
+        tether_y_coords,
+        tether_end_x_coords,
+        tether_end_y_coords
+    ) = build_plot_objects(agents, dims, max_dims, params)
+
+    #initialise figure
+    fig = Figure()
+    ax = Axis(fig[1,1];
+        backgroundcolor = :transparent,
+        xgridvisible = false,
+        ygridvisible = false,
+        xticksvisible = false,
+        yticksvisible = false,
+        aspect = DataAspect(),
+        limits = (0, max_dims[1], 0, max_dims[2]))
+    hidedecorations!(ax; grid=false)
+    hidespines!(ax)
+
+    #make a circle marker of unit size
+    unit_circle = BezierPath([MoveTo(Point(1,0)), EllipticalArc(Point(0, 0), 1, 1, 0, 0, 2pi)])
+
+    #plot membrane background
+    poly!(ax, membrane_obj;
+        color = RGBA(0.5, 0.5, 0.5, 0.2)
+    )
+
+    #agents
+    scatter!(ax, agent_x_coords, agent_y_coords; 
+        marker=unit_circle, 
+        markersize = agent_radii, 
+        markerspace=:data, 
+        color = agent_colours
+    )
+
+    #plot outlines to indicate insertion states
+    for (i, ins_state) in enumerate(insertion_states)
+        if ins_state=="bound"
+            agent_colour = agent_colours[i]
+            poly!(ax, Circle(Point2f(agent_x_coords[i], agent_y_coords[i]), agent_radii[i]);
+                strokecolor = RGBA(agent_colour.r, agent_colour.g, agent_colour.b, 1.0),
+                linestyle = :dash,
+                strokewidth = 4,
+                color = :transparent
+            )
+        elseif ins_state=="embedding"
+            agent_colour = agent_colours[i]
+            poly!(ax, Circle(Point2f(agent_x_coords[i], agent_y_coords[i]), agent_radii[i]);
+                strokecolor = RGBA(agent_colour.r, agent_colour.g, agent_colour.b, 1.0),
+                strokewidth = 4,
+                color = :transparent
+            )
+        end
+    end
+
+    #tethers to plot?
+    if length(tether_x_coords)>0
+        #tether points
+        scatter!(ax, tether_x_coords, tether_y_coords;
+            marker = :xcross,
+            markersize = 10,
+            color = :red
+        )
+
+        #tethers
+        for ix = 1:length(tether_x_coords)
+            lines!(
+                [tether_x_coords[ix], tether_end_x_coords[ix]], [tether_y_coords[ix], tether_end_y_coords[ix]];
+                color = :black,
+                linestyle = (:dash, :dense),
+                linewidth = 1
+            )
+        end
+    end
+
+
+    #now plot a mask to cover everything outside the membrane
+    membrane_mask = Polygon(
+        Point2f[[0.0, 0.0], [max_dims[1], 0.0], max_dims, [0.0, max_dims[2]]],
+        [membrane_obj]
+    )
+    poly!(ax, membrane_mask;
+        color=:white
+    )
+
+    #save figure
+    if !isdir(joinpath("out", out_path, "snapshots"))
+        mkpath(joinpath("out", out_path, "snapshots"))
+    end
+    img_path = joinpath("out", out_path, "snapshots", "snapshot_$(time_ix).png")
+    save(img_path, fig)
+
+    #vector version too
+    if !isdir(joinpath("out", out_path, "vector_snapshots"))
+        mkpath(joinpath("out", out_path, "vector_snapshots"))
+    end
+    img_path_vec = joinpath("out", out_path, "vector_snapshots", "snapshot_$(time_ix)_vector.svg")
+    save(img_path_vec, fig)
+end
+
+
+
+"""
+    make_snapshots(out_path::String, time_vals::Vector{Float64};
+    centering::Union{Tuple{String, Int}, Nothing}=nothing
+    )
+Makes snapshots at multiple time values specified in `time_vals` and saves them to `out_path`.
+Lightweight wrapper around `make_snapshot`.
+"""
+function make_snapshots(out_path::String, time_vals::Vector{Float64};
+    centering::Union{Tuple{String, Int}, Nothing}=nothing,
+    max_dims::Union{SVector{2, Float64}, Nothing}=nothing
+    )
+
+    for time_val in time_vals
+        make_snapshot(out_path, time_val; centering=centering, max_dims=max_dims)
+    end
+
+end
+
+
+"""
+    get_snapshots_across_sweep(list_of_out_paths::Vector{String}, time_vals::Vector{Float64};
+    centering::Union{Tuple{String, Int}, Nothing}=nothing
+    )
+Given a list of output paths (directories within `out`) and a list of time values,
+makes snapshots for each system at each time value. First determines the maximum membrane
+dimensions across all systems to ensure consistent sizing.
+"""
+function make_snapshots_across_sweep(list_of_out_paths::Vector{String}, time_vals::Vector{Float64};
+    centering::Union{Tuple{String, Int}, Nothing}=nothing
+    )
+
+    #first work out the maximum dimensions across all systems
+    max_dims = SVector{2, Float64}(0.0, 0.0)
+    for out_path in list_of_out_paths
+        #read in the copy of the config in the out_path
+        config_path = joinpath("out", out_path, "config.json")
+        params = parse_config(config_path)
+
+        #find the maximum dimensions (final data file)
+        num_time_steps = round(Int, params.system.t_max/params.system.vis_dt)
+        final_data_fname = joinpath("out", out_path, "raw_data", "sys_data_$(num_time_steps).jld2")
+        @load final_data_fname dims
+
+        #if larger than current max, update
+        if prod(dims)>prod(max_dims)
+            max_dims = dims
+        end
+    end
+
+    #now make snapshots for each system at each time value
+    for out_path in list_of_out_paths
+        make_snapshots(out_path, time_vals; centering=centering, max_dims=max_dims)
+    end
+
+end
