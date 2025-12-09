@@ -49,7 +49,7 @@
         "OMP_assembly_rate": 0.025
     },
     "force": {
-        "temperature": 0.5,
+        "temperature": 0.05,
         "mu_rep": 0.05,
         "mu_attr_OMP_OMP": 0.025,
         "mu_attr_OMP_LPS": 0.025,
