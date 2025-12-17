@@ -44,7 +44,7 @@
         "mu_rep" : 0.5,
         "mu_attr" : 0.5,
         "k_C": 0.5,
-        "PP_arrival_rate": 0.5,
+        "PP_arrival_rate": 5.0,
         "PP_bind_rate": 0.05,
         "OMP_assembly_rate": 0.0125
     },
