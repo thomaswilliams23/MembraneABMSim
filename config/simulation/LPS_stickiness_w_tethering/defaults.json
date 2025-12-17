@@ -2,7 +2,7 @@
     "OmpA": {
         "radius": 0.0518,
         "insertion_prob": 1.0,
-        "tether_rate": 0.3,
+        "tether_rate": 0.1,
         "tether_radius": 0.025
     },
     "OmpCF" : {
@@ -53,7 +53,7 @@
         "mu_rep": 0.05,
         "mu_attr_OMP_OMP": 0.025,
         "mu_attr_OMP_LPS": 0.025,
-        "mu_attr_LPS_LPS": 0.5,
+        "mu_attr_LPS_LPS": 0.01,
         "rho": 0.9,
         "max_repulsion": -0.1,
         "k_C": 0.5,
@@ -62,7 +62,7 @@
     },
     "system": {
         "density": 0.9,
-        "dt": 0.0001,
+        "dt": 0.001,
         "t_max": 300,
         "vis_dt": 0.1,
         "output_dir": "TEST_LPS_stickiness_w_tethering",
