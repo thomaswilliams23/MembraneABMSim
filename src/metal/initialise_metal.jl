@@ -11,7 +11,7 @@ function initialise_system_metal(params::AllParams; clear_existing_output::Bool=
     force_kernel = _force_kernel_metal!(MetalBackend())
 
     # set up output directory structure
-    set_up_output_directory(params.system.output_dir; clear_existing_output=clear_existing_output)
+    set_up_output_directory(params.system.output_dir; clear_existing_output=clear_existing_output, suppress_prints=suppress_prints)
 
     # decide which initialisation to use
     if params.init.method == "random"

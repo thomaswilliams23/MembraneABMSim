@@ -19,7 +19,7 @@ Output:
 function initialise_system_cpu(params::AllParams; clear_existing_output::Bool=false, suppress_prints::Bool=false)
 
     # set up output directory structure
-    set_up_output_directory(params.system.output_dir; clear_existing_output=clear_existing_output)
+    set_up_output_directory(params.system.output_dir; clear_existing_output=clear_existing_output, suppress_prints=suppress_prints)
 
     # decide which initialisation to use
     if params.init.method == "random"

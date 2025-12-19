@@ -281,10 +281,13 @@ function run_sweep(sweep_config_pathname::String)
     def_params = parse_config(sweep_config.default_config)
 
     #iterate through changes to be made as specified in the sweep config (and also reps)
-    all_sims = [sim_pair for sim_pair in sim_dict]
+    all_sims = collect(sim_dict)
     completed_sims = zeros(length(all_sims))
-    Threads.@threads for (sim_ix, (sim_path, sim_param_changes)) in enumerate(all_sims)
+    Threads.@threads for sim_ix in eachindex(all_sims)
 
+        #get sim info
+        (sim_path, sim_param_changes) = all_sims[sim_ix]
+        
         #set up output directory for this sim
         out_path = joinpath(sweep_config.output_base_dir, sim_path)
         set_up_output_directory(out_path; suppress_prints=true)
