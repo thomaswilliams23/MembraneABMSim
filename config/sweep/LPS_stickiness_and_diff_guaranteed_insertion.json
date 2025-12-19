@@ -2,7 +2,7 @@
     "sweep_params": {
         "force/temperature": {
             "short_name": "diffusion",
-            "values": [1e-6, 1e-5, 1e-4]
+            "values": [0, 1e-6, 1e-5, 1e-4]
         },
         "force/mu_attr_LPS_LPS": {
             "short_name": "mu_attr_LPS_LPS",
@@ -10,6 +10,6 @@
         }
     },
     "num_reps": 10,
-    "default_config": "config/simulation/LPS_stickiness_and_diff/defaults.json",
-    "output_base_dir": "LPS_stickiness_and_diff_sweep"
+    "default_config": "config/simulation/LPS_stickiness_and_diff_guaranteed_insertion/defaults.json",
+    "output_base_dir": "LPS_stickiness_and_diff_guaranteed_insertion_sweep"
 }
