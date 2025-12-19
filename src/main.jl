@@ -282,11 +282,12 @@ function run_sweep(sweep_config_pathname::String)
 
     #iterate through changes to be made as specified in the sweep config (and also reps)
     all_sims = [sim_pair for sim_pair in sim_dict]
-    Threads.@threads for (sim_path, sim_param_changes) in all_sims
+    completed_sims = zeros(length(all_sims))
+    Threads.@threads for (sim_ix, (sim_path, sim_param_changes)) in enumerate(all_sims)
 
         #set up output directory for this sim
         out_path = joinpath(sweep_config.output_base_dir, sim_path)
-        set_up_output_directory(out_path)
+        set_up_output_directory(out_path; suppress_prints=true)
 
         #make a config for each
         params_this_sim = make_config_this_sim(def_params, sim_param_changes, out_path)
@@ -299,7 +300,11 @@ function run_sweep(sweep_config_pathname::String)
 
         #run the sim
         run_sim(config_fname; suppress_prints=true)
-        println("Completed simulation at $sim_path")
+        
+        #check progress
+        completed_sims[sim_ix] = 1
+        percent_done = round(100*sum(completed_sims)/length(all_sims); digits=2)
+        print("Completed $(sum(completed_sims)) of $(length(all_sims)) simulations ($percent_done%)\r")
     end
 
 end
