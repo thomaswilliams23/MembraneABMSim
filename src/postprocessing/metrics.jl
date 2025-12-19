@@ -289,7 +289,6 @@ function get_ideal_domain_coverage(agents::AllAgents, dims::SVector{2, Float64},
 end
 
 
-
 """
     get_cutoff_time(params::AllParams)
 
@@ -319,3 +318,83 @@ function get_cutoff_time(params::AllParams)
 
     return cutoff_time
 end
+
+
+
+"""
+    get_squared_displacement(params::AllParams)
+
+Compute the squared displacement of all agents, structured by agent type. Ignores nascent agents. 
+Not robust to agent removals.
+"""
+function get_squared_displacement(params::AllParams)
+    
+    # get final number of agents
+    out_path = joinpath("out", params.system.output_dir)
+    raw_data_dir = joinpath(out_path, "raw_data")
+    max_time_ix = round(Int, params.system.t_max / params.system.vis_dt)
+    fname_final = joinpath(raw_data_dir, @sprintf("sys_data_%d.jld2", max_time_ix))
+    @load fname_final agents dims
+    final_num_agents = Dict(
+        "OmpA" => length(agents.OMP.OmpA),
+        "OmpCF" => length(agents.OMP.OmpCF),
+        "LptD" => length(agents.OMP.LptD),
+        "BamA" => length(agents.OMP.BamA),
+        "LPS" => length(agents.LPS)
+    )
+    num_time_points = max_time_ix + 1
+
+    #initialise
+    proportional_origin_positions = Dict(
+        "OmpA" => [SVector{2, Float64}(0.0, 0.0) for _ in 1:final_num_agents["OmpA"]],
+        "OmpCF" => [SVector{2, Float64}(0.0, 0.0) for _ in 1:final_num_agents["OmpCF"]],
+        "LptD" => [SVector{2, Float64}(0.0, 0.0) for _ in 1:final_num_agents["LptD"]],
+        "BamA" => [SVector{2, Float64}(0.0, 0.0) for _ in 1:final_num_agents["BamA"]],
+        "LPS" => [SVector{2, Float64}(0.0, 0.0) for _ in 1:final_num_agents["LPS"]]
+    )
+    num_agents_recorded_so_far = Dict(
+        "OmpA" => 0,
+        "OmpCF" => 0,
+        "LptD" => 0,
+        "BamA" => 0,
+        "LPS" => 0
+    )
+    squared_displacement = Dict(
+        "OmpA" => zeros(Float64, final_num_agents["OmpA"], num_time_points),
+        "OmpCF" => zeros(Float64, final_num_agents["OmpCF"], num_time_points),
+        "LptD" => zeros(Float64, final_num_agents["LptD"], num_time_points),
+        "BamA" => zeros(Float64, final_num_agents["BamA"], num_time_points),
+        "LPS" => zeros(Float64, final_num_agents["LPS"], num_time_points)
+    )
+
+    #loop time indices
+    for time_ix in 0:max_time_ix
+
+        #load in system state at this time point
+        fname_this_time_ix = joinpath(raw_data_dir, @sprintf("sys_data_%d.jld2", time_ix))
+        @load fname_this_time_ix agents dims
+
+        #loop agent types
+        for (agent_type, agent_vector) in zip(
+            ["OmpA", "OmpCF", "LptD", "BamA", "LPS"],
+            [agents.OMP.OmpA, agents.OMP.OmpCF, agents.OMP.LptD, agents.OMP.BamA, agents.LPS]
+        )
+            for (agent_ix, agent) in enumerate(agent_vector)
+                #record proportional origin position if first time seeing this agent
+                if agent_ix > num_agents_recorded_so_far[agent_type]
+                    proportional_origin_positions[agent_type][agent_ix] = agent.position ./ dims
+                    num_agents_recorded_so_far[agent_type] += 1
+                end
+                #compute squared displacement
+                origin_position = proportional_origin_positions[agent_type][agent_ix] .* dims
+                dist = shortest_distance(agent.position, origin_position, dims)
+                squared_displacement[agent_type][agent_ix, time_ix+1] = dist^2
+            end
+        end
+
+    end
+
+    return squared_displacement
+end
+
+
