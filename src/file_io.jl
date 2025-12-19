@@ -80,12 +80,14 @@ end
 
 Sets up the specified output directory and optionally clears it if there is already data present.
 """
-function set_up_output_directory(out_dir_path::String; clear_existing_output::Bool=false)
+function set_up_output_directory(out_dir_path::String; clear_existing_output::Bool=false, suppress_prints::Bool=false)
     raw_data_dir = joinpath("out", out_dir_path, "raw_data")
     if isdir(raw_data_dir)
         if !isempty(readdir(raw_data_dir))
             if clear_existing_output
-                println("Wiping existing output directory: $raw_data_dir")
+                if !suppress_prints
+                    println("Clearing existing output directory: $raw_data_dir")
+                end
                 rm(raw_data_dir; force=true, recursive=true)
                 mkpath(raw_data_dir)
                 return
@@ -107,6 +109,8 @@ function set_up_output_directory(out_dir_path::String; clear_existing_output::Bo
         end
     else
         mkpath(raw_data_dir)
-        println("Created output directory: $raw_data_dir")
+        if !suppress_prints
+            println("Created output directory: $raw_data_dir")
+        end
     end
 end

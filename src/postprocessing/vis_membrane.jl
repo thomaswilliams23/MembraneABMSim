@@ -277,8 +277,20 @@ function centre_all_agents!(agents::AllAgents, agent_type::String, agent_index::
         nascent_OMP.position += shift_vec
     end
 
-end
+    #shift tether points too
+    for OmpA in agents.OMP.OmpA
+        if OmpA.is_tethered
+            OmpA.tether_point += shift_vec
+        end
+    end
+    for LptD in agents.OMP.LptD
+        if LptD.is_tethered
+            LptD.tether_point += shift_vec
+        end
+    end
 
+    return
+end
 
 
 
