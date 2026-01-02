@@ -27,6 +27,11 @@ function initialise_system_cpu(params::AllParams; clear_existing_output::Bool=fa
             println("Initialising model with random distribution of agents...")
         end
         agents, grid_size, grid, system_flat_cpu = initialise_system_random(params; suppress_prints=suppress_prints)
+    elseif params.init.method == "specify_positions"
+        if !suppress_prints
+            println("Initialising model with specified agent positions...")
+        end
+        agents, grid_size, grid, system_flat_cpu = initialise_system_specify_positions(params; suppress_prints=suppress_prints)
     else
         #TODO: implement other initialisation methods?
         error("Initialisation type $(params.initialisation.init_type) not recognised.")
@@ -239,6 +244,141 @@ function initialise_agents_random(grid_size::GridSize, params::AllParams)
 end
 
 
+"""
+    initialise_agents_specify_positions(grid_size::GridSize, params::AllParams)
+
+Initialises the AllAgents structure with agents placed at specified positions within the domain.
+Any positions not specified are randomly assigned.
+"""
+function initialise_agents_specify_positions(grid_size::GridSize, params::AllParams)
+
+    #initialisation defaults
+    init_agent_arrival_time = -Inf     #init objects assumed to have arrived at -Inf
+
+    is_tethered_init = false           #all agents initialised as untethered
+    tether_point_init = 0.0            #all agents initialised as untethered
+    is_assembled_init = false          #all agents initialised as unassembled
+    insertion_state_init = "free"      #all agents initialised in the "free" state
+
+    nascent_OMPs_init = Vector{NascentOMPAgent}()
+                                       #no initial nascent objects
+    nascent_LPS_init = Vector{NascentLPSAgent}()
+                                       #no initial nascent objects
+
+    #first check that positions have been specified
+    if isnothing(params.init.positions)
+        error("No positions specified in params.init.positions for 'specify_positions' initialisation method. Use 'random' method or provide positions.")
+    end
+
+    #check positions are valid
+    for agent_type in [:OmpA, :OmpCF, :LptD, :BamA, :LPS]
+        pos_list = getfield(params.init.positions, agent_type)
+        num_agents_of_type = getfield(params.init, Symbol("num_$agent_type"))
+        if !isnothing(pos_list)
+            @assert length(pos_list) <= num_agents_of_type "Number of specsified positions for $agent_type exceeds number of agents of that type."
+            for pos in pos_list
+                @assert all(pos .>= 0.0) "Specified position $pos for $agent_type is out of bounds (negative coordinate)."
+                @assert pos[1] <= grid_size.dims[1] "Specified x position $(pos[1]) for $agent_type exceeds domain size ($(grid_size.dims[1]))."
+                @assert pos[2] <= grid_size.dims[2] "Specified y position $(pos[2]) for $agent_type exceeds domain size ($(grid_size.dims[2]))."
+            end
+        end
+    end
+
+    #check if any random placement is required
+    includes_random_placement = false
+    for agent_type in [:OmpA, :OmpCF, :LptD, :BamA, :LPS]
+        pos_list = getfield(params.init.positions, agent_type)
+        num_agents_of_type = getfield(params.init, Symbol("num_$agent_type"))
+        if num_agents_of_type > 0
+            if isnothing(pos_list)
+                includes_random_placement = true
+                break
+            elseif length(pos_list) < num_agents_of_type
+                includes_random_placement = true
+                break
+            end
+        end
+    end
+
+    #helper to get position or random if not specified
+    function _get_position_or_random(pos_list::Union{Nothing, Vector{SVector{2, Float64}}}, ix::Int)
+        if isnothing(pos_list) || length(pos_list)<ix
+            return SVector{2, Float64}(rand() * grid_size.dims[1], rand() * grid_size.dims[2])
+        else
+            return pos_list[ix]
+        end
+    end
+
+    #initialise agents and package them
+    num_agents_allocated_so_far = 0
+    all_OmpAs = [
+        OmpAAgent(
+            ix + num_agents_allocated_so_far,
+            _get_position_or_random(params.init.positions.OmpA, ix),
+            init_agent_arrival_time, 
+            is_tethered_init, 
+            SVector{2, Float64}(tether_point_init, tether_point_init)
+        )
+        for ix in 1:params.init.num_OmpA
+    ]
+
+    num_agents_allocated_so_far += params.init.num_OmpA
+    all_OmpCFs = [
+        OmpCFAgent(
+            ix + num_agents_allocated_so_far,
+            _get_position_or_random(params.init.positions.OmpCF, ix),
+            init_agent_arrival_time
+        )
+        for ix in 1:params.init.num_OmpCF
+    ]
+
+    num_agents_allocated_so_far += params.init.num_OmpCF
+    all_LptDs = [
+        LptDAgent(
+            ix + num_agents_allocated_so_far,
+            _get_position_or_random(params.init.positions.LptD, ix),
+            init_agent_arrival_time, 
+            is_tethered_init,
+            SVector{2, Float64}(tether_point_init, tether_point_init),
+            is_assembled_init,
+            insertion_state_init
+        )
+        for ix in 1:params.init.num_LptD
+    ]
+
+    num_agents_allocated_so_far += params.init.num_LptD
+    all_BamAs = [
+        BamAAgent(
+            ix + num_agents_allocated_so_far,
+            _get_position_or_random(params.init.positions.BamA, ix),
+            init_agent_arrival_time, 
+            is_assembled_init, 
+            insertion_state_init
+        )
+        for ix in 1:params.init.num_BamA
+    ]
+
+    num_agents_allocated_so_far += params.init.num_BamA
+    all_LPS = [
+        LPSAgent(
+            ix + num_agents_allocated_so_far,
+            _get_position_or_random(params.init.positions.LPS, ix),
+            init_agent_arrival_time
+        )
+        for ix in 1:params.init.num_LPS
+    ]
+
+    #group together
+    num_PP_init = params.init.num_PP
+    agents = AllAgents(
+        AllOMPs(all_OmpAs, all_OmpCFs, all_LptDs, all_BamAs),
+        all_LPS,
+        AllNascent(nascent_OMPs_init, nascent_LPS_init),
+        num_PP_init
+    )
+
+    return (agents, includes_random_placement)
+end
 
 
 """
@@ -517,6 +657,79 @@ function initialise_system_random(params::AllParams; suppress_prints::Bool=false
 
     return (agents, grid_size, grid, system_flat_cpu)
 end
+
+
+"""
+    initialise_system_specify_positions(params::AllParams; suppress_prints::Bool=false)
+
+Initialises a simulation with agents placed at specified positions within the domain.
+"""
+function initialise_system_specify_positions(params::AllParams; suppress_prints::Bool=false)
+
+    #initialise simulation objects
+    grid_size, grid = initialise_grid(params)
+    system_flat_cpu = initialise_flat_cpu(params)
+    agents, includes_random_placement = initialise_agents_specify_positions(grid_size, params)
+
+    #populate data structures
+    rebuild_grid!(grid_size, grid, agents, params.force.sensing_radius)
+    compile_flat_system_data_cpu!(system_flat_cpu, agents, grid_size, grid, params)
+    put_grid_in_sorted_order!(grid_size, grid, system_flat_cpu)
+    grid_size.num_agents_changed = false
+
+    #if random placement was included, run equilibration
+    if includes_random_placement
+        if !suppress_prints
+            println("Some agents were randomly placed. Running equilibration.")
+        end
+
+        #run equilibration
+        steps_since_grid_sync = 0
+        MAX_STEPS_BETWEEN_GRID_SYNC = 100 #temporary
+        t = 0.0
+        time_err = 0.1 * params.system.dt
+        while t < params.init.equilibration_time - time_err
+
+            if steps_since_grid_sync >= MAX_STEPS_BETWEEN_GRID_SYNC
+                rebuild_grid!(grid_size, grid, agents, params.force.sensing_radius)
+                compile_flat_system_data_cpu!(system_flat_cpu, agents, grid_size, grid, params)
+                put_grid_in_sorted_order!(grid_size, grid, system_flat_cpu)
+
+                steps_since_grid_sync = 0
+            else
+                steps_since_grid_sync += 1
+            end
+
+            resolve_forces_cpu!(agents, grid_size, grid, system_flat_cpu, params)
+            
+            t += params.system.dt
+
+
+            #report time
+            if abs(t/params.system.vis_dt - round(t/params.system.vis_dt))<time_err
+                if !suppress_prints
+                    @printf "Running equilibration: τ=%5.2f\r" t
+                end
+            end
+        end
+        if !suppress_prints
+            println("\nEquilibration complete.")
+        end
+
+    else
+        if !suppress_prints
+            println("All agents placed at specified positions. Skipping equilibration.")
+        end
+    end
+
+    #if specified, set all agents as assembled/tethered
+    if params.init.complexes_assembled
+        assemble_all_agents!(agents, system_flat_cpu)
+    end
+
+    return (agents, grid_size, grid, system_flat_cpu)
+end
+
 
 
 
