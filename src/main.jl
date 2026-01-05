@@ -322,7 +322,7 @@ function run_sweep(sweep_config_pathname::String; run_serially_yn::Bool=false)
     end
 
     #run all the simulations
-    completed_sims = zeros(length(all_sims))
+    completed_sims = zeros(Int, length(all_sims))
     if run_serially_yn
         for sim_ix in eachindex(all_sims)
             _run_sim_in_sweep(sim_ix, all_sims, def_params)
