@@ -239,7 +239,7 @@ function update_BAM_subsystem!(agents::AllAgents, grid_size::GridSize, grid::Sim
     if length(nascent_OMP_ixs_to_delete)>0
 
         #delete the nascent agents which have been promoted
-        deleteat!(agents.nascent.nascent_OMP, nascent_OMP_ixs_to_delete)
+        deleteat!(agents.nascent.nascent_OMP, sort(nascent_OMP_ixs_to_delete))
 
         #update_flat_data_nascent_agents!(agents, system_flat)
         grid_size.nascent_promoted = true
@@ -480,7 +480,7 @@ function update_Lpt_subsystem!(agents::AllAgents, grid_size::GridSize, system_fl
     if length(nascent_LPS_ixs_to_delete)>0
 
         #delete the nascent agents which have been promoted
-        deleteat!(agents.nascent.nascent_LPS, nascent_LPS_ixs_to_delete)
+        deleteat!(agents.nascent.nascent_LPS, sort(nascent_LPS_ixs_to_delete))
 
         #update_flat_data_nascent_agents!(agents, system_flat)
         grid_size.nascent_promoted = true
