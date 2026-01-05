@@ -272,7 +272,7 @@ Wrapper around `run_sim` to run a parameter sweep as specified in a sweep config
 function run_sweep(sweep_config_pathname::String; run_serially_yn::Bool=false)
 
     #helper for running one of the simulations in the sweep
-    function _run_sim_in_sweep(sim_ix::Int, all_sims::Vector{Tuple{String, Dict{String, Any}}}, def_params::AllParams)
+    function _run_sim_in_sweep(sim_ix::Int, all_sims::Vector{Pair{String, Dict{String, Any}}}, def_params::AllParams)
 
         #get sim info
         (sim_path, sim_param_changes) = all_sims[sim_ix]
