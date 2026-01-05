@@ -54,6 +54,21 @@ struct LPSParams
     insertion_time::Float64
 end
 
+
+"""
+    InitPositions
+
+Initial positions (optional) for different agent types in the simulation.
+"""
+struct InitPositions
+    OmpA::Union{Nothing, Vector{SVector{2, Float64}}}
+    OmpCF::Union{Nothing, Vector{SVector{2, Float64}}}
+    LptD::Union{Nothing, Vector{SVector{2, Float64}}}
+    BamA::Union{Nothing, Vector{SVector{2, Float64}}}
+    LPS::Union{Nothing, Vector{SVector{2, Float64}}}
+end
+
+
 """
     InitConditions
 
@@ -68,6 +83,7 @@ struct InitConditions
     num_BamA::Int
     num_LPS::Int
     num_PP::Int
+    positions::Union{Nothing, InitPositions}
     method::String
     equilibration_time::Union{Nothing, Float64}
     complexes_assembled::Union{Nothing, Bool}
@@ -171,6 +187,7 @@ StructTypes.StructType(::Type{OmpCFParams}) = StructTypes.Struct()
 StructTypes.StructType(::Type{LptDParams}) = StructTypes.Struct()
 StructTypes.StructType(::Type{BamAParams}) = StructTypes.Struct()
 StructTypes.StructType(::Type{LPSParams}) = StructTypes.Struct()
+StructTypes.StructType(::Type{InitPositions}) = StructTypes.Struct()
 StructTypes.StructType(::Type{InitConditions}) = StructTypes.Struct()
 StructTypes.StructType(::Type{InsertionParams}) = StructTypes.Struct()
 StructTypes.StructType(::Type{SystemParams}) = StructTypes.Struct()
