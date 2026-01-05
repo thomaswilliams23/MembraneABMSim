@@ -84,7 +84,7 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false, sup
             all_data_CUDA, 
             grid_size_CUDA, 
             params_CUDA
-        ) = initialise_system_CUDA(params; clear_existing_output=clear_existing_output)
+        ) = initialise_system_CUDA(params; clear_existing_output=clear_existing_output, suppress_prints=suppress_prints)
         effective_rad_incs_CUDA = Float32.(effective_rad_incs)
         ideal_dist_incs_CUDA = Float32.(ideal_dist_incs)
     end
