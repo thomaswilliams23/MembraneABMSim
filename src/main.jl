@@ -269,21 +269,10 @@ end
 
 Wrapper around `run_sim` to run a parameter sweep as specified in a sweep config JSON file.
 """
-function run_sweep(sweep_config_pathname::String)
+function run_sweep(sweep_config_pathname::String; run_serially_yn::Bool=false)
 
-    #parse sweep config (file_io.jl)
-    sweep_config = parse_sweep_config(sweep_config_pathname)
-
-    #build a list of simulations to do with parameter information for each
-    sim_dict = build_sim_dict(sweep_config)
-
-    #load in the default parameters
-    def_params = parse_config(sweep_config.default_config)
-
-    #iterate through changes to be made as specified in the sweep config (and also reps)
-    all_sims = collect(sim_dict)
-    completed_sims = zeros(length(all_sims))
-    Threads.@threads for sim_ix in eachindex(all_sims)
+    #helper for running one of the simulations in the sweep
+    function _run_sim_in_sweep(sim_ix::Int, all_sims::Vector{Tuple{String, Dict{String, Any}}}, def_params::AllParams)
 
         #get sim info
         (sim_path, sim_param_changes) = all_sims[sim_ix]
@@ -303,11 +292,47 @@ function run_sweep(sweep_config_pathname::String)
 
         #run the sim
         run_sim(config_fname; suppress_prints=true)
-        
-        #check progress
+    end
+
+    #helper for printing progress
+    function _print_progress!(completed_sims::Vector{Int}, sim_ix::Int, num_sims::Int)
         completed_sims[sim_ix] = 1
-        percent_done = round(100*sum(completed_sims)/length(all_sims); digits=2)
-        print("Completed $(sum(completed_sims)) of $(length(all_sims)) simulations ($percent_done%)\r")
+        num_completed = sum(completed_sims)
+        print("Completed $num_completed of $num_sims simulations\r")
+    end
+
+
+    #parse sweep config (file_io.jl)
+    sweep_config = parse_sweep_config(sweep_config_pathname)
+
+    #build a list of simulations to do with parameter information for each
+    sim_dict = build_sim_dict(sweep_config)
+
+    #load in the default parameters
+    def_params = parse_config(sweep_config.default_config)
+
+    #iterate through changes to be made as specified in the sweep config (and also reps)
+    all_sims = collect(sim_dict)
+    completed_sims = zeros(length(all_sims))
+
+    #decide if we can parallelise based on device type
+    if def_params.system.device == "cuda" || def_params.system.device == "metal"
+        println("Running sweep serially due to GPU device usage")
+        run_serially_yn = true
+    end
+
+    #run all the simulations
+    completed_sims = zeros(length(all_sims))
+    if run_serially_yn
+        for sim_ix in eachindex(all_sims)
+            _run_sim_in_sweep(sim_ix, all_sims, def_params)
+            _print_progress!(completed_sims, sim_ix, length(all_sims))
+        end
+    else
+        Threads.@threads for sim_ix in eachindex(all_sims)
+            _run_sim_in_sweep(sim_ix, all_sims, def_params)
+            _print_progress!(completed_sims, sim_ix, length(all_sims))
+        end
     end
 
 end
