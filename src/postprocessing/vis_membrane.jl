@@ -307,6 +307,8 @@ Note that the index is the index of the agent in the relevant `AllAgents` vector
 the system. This agent must be present at the start of the simulation.
 """
 function make_membrane_movie(out_path::String;
+    plot_time_series::Bool=false,
+    plot_size::Int=500,
     fps::Int=24, 
     centering::Union{Tuple{String, Int}, Nothing}=nothing)
 
@@ -330,8 +332,14 @@ function make_membrane_movie(out_path::String;
     max_dims = dims
 
     #initialise figure
-    fig = Figure()
-    ax = Axis(fig[1,1];
+    if plot_time_series
+        fig = Figure(size = (2*plot_size, plot_size))
+    else
+        fig = Figure(size = (plot_size, plot_size))
+    end
+    gl = fig[1,1] = GridLayout()
+
+    ax = Axis(gl[1,1];
         backgroundcolor = :transparent,
         xgridvisible = false,
         ygridvisible = false,
@@ -341,6 +349,19 @@ function make_membrane_movie(out_path::String;
         limits = (0, max_dims[1], 0, max_dims[2]))
     hidedecorations!(ax; grid=false)
     hidespines!(ax)
+
+    #optionally initialise a time series plot
+    if plot_time_series
+        max_size = 1.2 * max_dims[1]*max_dims[2]
+        ax_ts = Axis(gl[1,2];
+            xlabel = "Time",
+            ylabel = "Membrane Size",
+            limits = ((0, params.system.t_max), (0, max_size))
+        )
+        colsize!(gl, 1, Relative(0.5))
+        colsize!(gl, 2, Relative(0.5))
+        membrane_size_ts = Float64[]
+    end
 
     #make a circle marker of unit size
     unit_circle = BezierPath([MoveTo(Point(1,0)), EllipticalArc(Point(0, 0), 1, 1, 0, 0, 2pi)])
@@ -444,6 +465,15 @@ function make_membrane_movie(out_path::String;
         poly!(ax, membrane_mask;
             color=:white
         )
+
+
+        #optionally plot time series
+        if plot_time_series
+            empty!(ax_ts)
+            membrane_size = dims[1] * dims[2]
+            push!(membrane_size_ts, membrane_size)
+            lines!(ax_ts, (0:time_ix) .* params.system.vis_dt, membrane_size_ts; color=:blue, linewidth=2)
+        end
 
         
     end
@@ -661,3 +691,5 @@ function make_snapshots_across_sweep(list_of_out_paths::Vector{String}, time_val
     end
 
 end
+
+
