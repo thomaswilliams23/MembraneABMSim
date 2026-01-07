@@ -312,25 +312,25 @@ end
 """
     get_cutoff_time(params::AllParams)
 
-Computes the time at which the membrane size plateaus (i.e. no further agents can be inserted).
+Computes the time at which the OMP number plateaus (i.e. no further agents can be inserted).
 """
 function get_cutoff_time(params::AllParams)
 
-    # get final membrane size
+    # get final OMP number
     out_path = joinpath("out", params.system.output_dir)
     raw_data_dir = joinpath(out_path, "raw_data")
     max_time_ix = round(Int, params.system.t_max / params.system.vis_dt)
     fname_final = joinpath(raw_data_dir, @sprintf("sys_data_%d.jld2", max_time_ix))
     @load fname_final agents dims
-    final_membrane_size = get_membrane_size(agents, dims, params)
+    final_OMP_number = get_num_OMP_agents(agents, dims, params)
 
-    # iterate backwards through time points to find when membrane size plateaus
+    # iterate backwards through time points to find when OMP number plateaus
     cutoff_time = params.system.t_max
     for time_ix in (max_time_ix-1):-1:0
         fname_this_time_ix = joinpath(raw_data_dir, @sprintf("sys_data_%d.jld2", time_ix))
         @load fname_this_time_ix agents dims
-        membrane_size_this_time = get_membrane_size(agents, dims, params)
-        if membrane_size_this_time < final_membrane_size
+        OMP_number_this_time = get_num_OMP_agents(agents, dims, params)
+        if OMP_number_this_time < final_OMP_number
             cutoff_time = time_ix * params.system.vis_dt
             break
         end
