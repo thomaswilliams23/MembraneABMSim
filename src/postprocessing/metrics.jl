@@ -8,6 +8,26 @@ function get_membrane_size(agents::AllAgents, dims::SVector{2, Float64}, params:
 end
 
 
+"""
+    get_num_OMP_agents(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+
+Counts the total number of OMP agents in the system.
+"""
+function get_num_OMP_agents(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+    num_OMP = length(agents.OMP.OmpA) + length(agents.OMP.OmpCF) + length(agents.OMP.LptD) + length(agents.OMP.BamA)
+    return num_OMP
+end
+
+
+"""
+    get_num_OmpA_agents(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+
+Counts the number of OmpA agents in the system.
+"""
+function get_num_OmpA_agents(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+    return length(agents.OMP.OmpA)
+end
+
 
 """
     get_num_LPS_bordering_OMP(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
