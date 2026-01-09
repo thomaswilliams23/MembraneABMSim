@@ -11,10 +11,13 @@ function get_time_series(func::Function, out_path::String, params::AllParams)
     #raw data directory
     raw_data_dir = joinpath(out_path, "raw_data")
 
-    #allocate memory
+    #allocate memory - assumes function evaluations always return the same type
     max_time_ix = round(Int, params.system.t_max / params.system.vis_dt)
-    time_series = Vector{Float64}(undef, max_time_ix+1)
-
+    fname_first = joinpath(raw_data_dir, @sprintf("sys_data_%d.jld2", 0))
+    @load fname_first agents dims
+    first_eval = func(agents, dims, params)
+    time_series = Vector{typeof(first_eval)}(undef, max_time_ix+1)
+    
     #iterate through time points
     Threads.@threads for time_ix in 0:max_time_ix
 
