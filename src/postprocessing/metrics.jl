@@ -315,6 +315,18 @@ end
 
 
 """
+    get_BAM_states(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+
+Returns a vector of the states of all BamA agents.
+"""
+function get_BAM_states(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+    list_of_states = [BAM.state for BAM in agents.OMP.BamA]
+    return list_of_states
+end
+
+
+
+"""
     get_cutoff_time(params::AllParams)
 
 Computes the time at which the OMP number plateaus (i.e. no further agents can be inserted).
@@ -421,5 +433,3 @@ function get_squared_displacement(params::AllParams)
 
     return squared_displacement
 end
-
-
