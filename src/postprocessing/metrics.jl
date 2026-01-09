@@ -320,7 +320,7 @@ end
 Returns a vector of the states of all BamA agents.
 """
 function get_BAM_states(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
-    list_of_states = [BAM.state for BAM in agents.OMP.BamA]
+    list_of_states = [BAM.insertion_state for BAM in agents.OMP.BamA]
     return list_of_states
 end
 
