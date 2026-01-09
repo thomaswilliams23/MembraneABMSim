@@ -9,13 +9,18 @@ end
 
 
 """
-    get_num_OMP_agents(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+    get_num_agents(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
 
-Counts the total number of OMP agents in the system.
+Counts agents of all types in the system.
 """
-function get_num_OMP_agents(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
-    num_OMP = length(agents.OMP.OmpA) + length(agents.OMP.OmpCF) + length(agents.OMP.LptD) + length(agents.OMP.BamA)
-    return num_OMP
+function get_num_agents(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+    return Dict(
+        "OmpA" => length(agents.OMP.OmpA),
+        "OmpCF" => length(agents.OMP.OmpCF),
+        "LptD" => length(agents.OMP.LptD),
+        "BamA" => length(agents.OMP.BamA),
+        "LPS" => length(agents.LPS)
+    )
 end
 
 
