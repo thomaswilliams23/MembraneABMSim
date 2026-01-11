@@ -293,6 +293,107 @@ function centre_all_agents!(agents::AllAgents, agent_type::String, agent_index::
 end
 
 
+"""
+    plot_agents!(ax::Axis, agents::AllAgents, dims::SVector{2, Float64}, 
+                 max_dims::SVector{2, Float64}, params::AllParams;
+                 centering::Union{Tuple{String, Int}, Nothing}=nothing)
+
+Plots all membrane agents to axis `ax`.
+"""
+function plot_agents!(ax::Axis, agents::AllAgents, dims::SVector{2, Float64}, 
+    max_dims::SVector{2, Float64}, params::AllParams;
+    centering::Union{Tuple{String, Int}, Nothing}=nothing)
+
+    #optionally centre everything around a specific agent
+    if !isnothing(centering)
+        centre_all_agents!(agents, centering[1], centering[2], dims)
+    end
+
+    
+    #get agent representations for this time step
+    (
+        membrane_obj, 
+        agent_x_coords, 
+        agent_y_coords, 
+        agent_radii, 
+        agent_colours,
+        insertion_states,
+        tether_x_coords,
+        tether_y_coords,
+        tether_end_x_coords,
+        tether_end_y_coords
+    ) = build_plot_objects(agents, dims, max_dims, params)
+
+    #clear current plot and plot representations for this time step
+    empty!(ax)
+
+    #plot membrane background
+    poly!(ax, membrane_obj;
+        color = RGBA(0.5, 0.5, 0.5, 0.2)
+    )
+
+    #agents
+    unit_circle = BezierPath([MoveTo(Point(1,0)), EllipticalArc(Point(0, 0), 1, 1, 0, 0, 2pi)])
+    scatter!(ax, agent_x_coords, agent_y_coords; 
+        marker=unit_circle, 
+        markersize = agent_radii, 
+        markerspace=:data, 
+        color = agent_colours
+    )
+
+    #plot outlines to indicate insertion states
+    for (i, ins_state) in enumerate(insertion_states)
+        if ins_state=="bound"
+            agent_colour = agent_colours[i]
+            poly!(ax, Circle(Point2f(agent_x_coords[i], agent_y_coords[i]), agent_radii[i]);
+                strokecolor = RGBA(agent_colour.r, agent_colour.g, agent_colour.b, 1.0),
+                linestyle = :dash,
+                strokewidth = 4,
+                color = :transparent
+            )
+        elseif ins_state=="embedding"
+            agent_colour = agent_colours[i]
+            poly!(ax, Circle(Point2f(agent_x_coords[i], agent_y_coords[i]), agent_radii[i]);
+                strokecolor = RGBA(agent_colour.r, agent_colour.g, agent_colour.b, 1.0),
+                strokewidth = 4,
+                color = :transparent
+            )
+        end
+    end
+
+    #tethers to plot?
+    if length(tether_x_coords)>0
+        
+        #tether points
+        scatter!(ax, tether_x_coords, tether_y_coords;
+            marker = :xcross,
+            markersize = 10,
+            color = :red
+        )
+
+        #tethers
+        for ix in eachindex(tether_x_coords)
+            lines!(
+                [tether_x_coords[ix], tether_end_x_coords[ix]], [tether_y_coords[ix], tether_end_y_coords[ix]];
+                color = :black,
+                linestyle = (:dash, :dense),
+                linewidth = 1
+            )
+        end
+    end
+
+    #now plot a mask to cover everything outside the membrane
+    membrane_mask = Polygon(
+        Point2f[[0.0, 0.0], [max_dims[1], 0.0], max_dims, [0.0, max_dims[2]]],
+        [membrane_obj]
+    )
+    poly!(ax, membrane_mask;
+        color=:white
+    )
+
+    return
+end
+
 
 
 """
@@ -379,93 +480,8 @@ function make_membrane_movie(out_path::String;
         data_fname = joinpath("out", out_path, "raw_data", "sys_data_$(time_ix).jld2")
         @load data_fname agents dims
 
-
-        #optionally centre everything around a specific agent
-        if !isnothing(centering)
-            centre_all_agents!(agents, centering[1], centering[2], dims)
-        end
-
-        
-        #get agent representations for this time step
-        (
-            membrane_obj, 
-            agent_x_coords, 
-            agent_y_coords, 
-            agent_radii, 
-            agent_colours,
-            insertion_states,
-            tether_x_coords,
-            tether_y_coords,
-            tether_end_x_coords,
-            tether_end_y_coords
-        ) = build_plot_objects(agents, dims, max_dims, params)
-
-        #clear current plot and plot representations for this time step
-        empty!(ax)
-
-        #plot membrane background
-        poly!(ax, membrane_obj;
-            color = RGBA(0.5, 0.5, 0.5, 0.2)
-        )
-
-        #agents
-        scatter!(ax, agent_x_coords, agent_y_coords; 
-            marker=unit_circle, 
-            markersize = agent_radii, 
-            markerspace=:data, 
-            color = agent_colours
-        )
-
-        #plot outlines to indicate insertion states
-        for (i, ins_state) in enumerate(insertion_states)
-            if ins_state=="bound"
-                agent_colour = agent_colours[i]
-                poly!(ax, Circle(Point2f(agent_x_coords[i], agent_y_coords[i]), agent_radii[i]);
-                    strokecolor = RGBA(agent_colour.r, agent_colour.g, agent_colour.b, 1.0),
-                    linestyle = :dash,
-                    strokewidth = 4,
-                    color = :transparent
-                )
-            elseif ins_state=="embedding"
-                agent_colour = agent_colours[i]
-                poly!(ax, Circle(Point2f(agent_x_coords[i], agent_y_coords[i]), agent_radii[i]);
-                    strokecolor = RGBA(agent_colour.r, agent_colour.g, agent_colour.b, 1.0),
-                    strokewidth = 4,
-                    color = :transparent
-                )
-            end
-        end
-
-        #tethers to plot?
-        if length(tether_x_coords)>0
-            
-            #tether points
-            scatter!(ax, tether_x_coords, tether_y_coords;
-                marker = :xcross,
-                markersize = 10,
-                color = :red
-            )
-
-            #tethers
-            for ix = 1:length(tether_x_coords)
-                lines!(
-                    [tether_x_coords[ix], tether_end_x_coords[ix]], [tether_y_coords[ix], tether_end_y_coords[ix]];
-                    color = :black,
-                    linestyle = (:dash, :dense),
-                    linewidth = 1
-                )
-            end
-        end
-
-        #now plot a mask to cover everything outside the membrane
-        membrane_mask = Polygon(
-            Point2f[[0.0, 0.0], [max_dims[1], 0.0], max_dims, [0.0, max_dims[2]]],
-            [membrane_obj]
-        )
-        poly!(ax, membrane_mask;
-            color=:white
-        )
-
+        #plot agents
+        plot_agents!(ax, agents, dims, max_dims, params; centering=centering)
 
         #optionally plot time series
         if plot_time_series
@@ -521,25 +537,6 @@ function make_snapshot(out_path::String, time_val::Float64;
     data_fname = joinpath("out", out_path, "raw_data", "sys_data_$(time_ix).jld2")
     @load data_fname agents dims
 
-    #optionally centre everything around a specific agent
-    if !isnothing(centering)
-        centre_all_agents!(agents, centering[1], centering[2], dims)
-    end
-
-    #get agent representations for this time step
-    (
-        membrane_obj, 
-        agent_x_coords, 
-        agent_y_coords, 
-        agent_radii, 
-        agent_colours,
-        insertion_states,
-        tether_x_coords,
-        tether_y_coords,
-        tether_end_x_coords,
-        tether_end_y_coords
-    ) = build_plot_objects(agents, dims, max_dims, params)
-
     #initialise figure
     fig = Figure()
     ax = Axis(fig[1,1];
@@ -553,71 +550,8 @@ function make_snapshot(out_path::String, time_val::Float64;
     hidedecorations!(ax; grid=false)
     hidespines!(ax)
 
-    #make a circle marker of unit size
-    unit_circle = BezierPath([MoveTo(Point(1,0)), EllipticalArc(Point(0, 0), 1, 1, 0, 0, 2pi)])
-
-    #plot membrane background
-    poly!(ax, membrane_obj;
-        color = RGBA(0.5, 0.5, 0.5, 0.2)
-    )
-
-    #agents
-    scatter!(ax, agent_x_coords, agent_y_coords; 
-        marker=unit_circle, 
-        markersize = agent_radii, 
-        markerspace=:data, 
-        color = agent_colours
-    )
-
-    #plot outlines to indicate insertion states
-    for (i, ins_state) in enumerate(insertion_states)
-        if ins_state=="bound"
-            agent_colour = agent_colours[i]
-            poly!(ax, Circle(Point2f(agent_x_coords[i], agent_y_coords[i]), agent_radii[i]);
-                strokecolor = RGBA(agent_colour.r, agent_colour.g, agent_colour.b, 1.0),
-                linestyle = :dash,
-                strokewidth = 4,
-                color = :transparent
-            )
-        elseif ins_state=="embedding"
-            agent_colour = agent_colours[i]
-            poly!(ax, Circle(Point2f(agent_x_coords[i], agent_y_coords[i]), agent_radii[i]);
-                strokecolor = RGBA(agent_colour.r, agent_colour.g, agent_colour.b, 1.0),
-                strokewidth = 4,
-                color = :transparent
-            )
-        end
-    end
-
-    #tethers to plot?
-    if length(tether_x_coords)>0
-        #tether points
-        scatter!(ax, tether_x_coords, tether_y_coords;
-            marker = :xcross,
-            markersize = 10,
-            color = :red
-        )
-
-        #tethers
-        for ix = 1:length(tether_x_coords)
-            lines!(
-                [tether_x_coords[ix], tether_end_x_coords[ix]], [tether_y_coords[ix], tether_end_y_coords[ix]];
-                color = :black,
-                linestyle = (:dash, :dense),
-                linewidth = 1
-            )
-        end
-    end
-
-
-    #now plot a mask to cover everything outside the membrane
-    membrane_mask = Polygon(
-        Point2f[[0.0, 0.0], [max_dims[1], 0.0], max_dims, [0.0, max_dims[2]]],
-        [membrane_obj]
-    )
-    poly!(ax, membrane_mask;
-        color=:white
-    )
+    #plot agents
+    plot_agents!(ax, agents, dims, max_dims, params; centering=centering)
 
     #save figure
     if !isdir(joinpath("out", out_path, "snapshots"))
