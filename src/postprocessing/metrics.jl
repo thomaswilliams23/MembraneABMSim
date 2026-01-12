@@ -325,6 +325,25 @@ function get_BAM_states(agents::AllAgents, dims::SVector{2, Float64}, params::Al
 end
 
 
+"""
+    get_distance_between_BamAs(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+
+Returns a matrix of the pairwise distances between all BamA agents.
+"""
+function get_distance_between_BAMs(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+    num_BamAs = length(agents.OMP.BamA)
+    distances = Array{Float64}(undef, num_BamAs, num_BamAs)
+    for i in 1:(num_BamAs-1)
+        for j in (i+1):num_BamAs
+            dist = shortest_distance(agents.OMP.BamA[i].position, agents.OMP.BamA[j].position, dims)
+            distances[i, j] = dist
+            distances[j, i] = dist
+        end
+    end
+    return distances
+end
+
+
 
 """
     get_cutoff_time(params::AllParams)
