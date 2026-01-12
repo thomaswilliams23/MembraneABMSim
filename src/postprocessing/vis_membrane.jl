@@ -24,7 +24,8 @@ end
 
 
 """
-    build_plot_objects(agents::AllAgents, dims::SVector{2, Float64}, max_dims::SVector{2, Float64}, params::AllParams)
+    build_plot_objects(agents::AllAgents, dims::SVector{2, Float64}, max_dims::SVector{2, Float64}, params::AllParams;
+        demarcate_new_LPS_yn::Bool=false)
 
 Given a system state (specifically, an AllAgents structure, `agents`, and a grid dimensions 
 vector `dims`), extracts and returns vectors of data necessary for plotting, centered within
@@ -42,7 +43,8 @@ the maximal membrane domain
     tether_end_y_coords.    # y coordinates of each tethered agent (for plotting tethers)
 )
 """
-function build_plot_objects(agents::AllAgents, dims::SVector{2, Float64}, max_dims::SVector{2, Float64}, params::AllParams)
+function build_plot_objects(agents::AllAgents, dims::SVector{2, Float64}, max_dims::SVector{2, Float64}, params::AllParams;
+    demarcate_new_LPS_yn::Bool=false)
 
     #colour defaults
     non_nascent_alpha = 0.7
@@ -52,11 +54,13 @@ function build_plot_objects(agents::AllAgents, dims::SVector{2, Float64}, max_di
     BamA_colour = RGBA(0.89, 0.10, 0.11, non_nascent_alpha)
     LptD_colour = RGBA(0.30, 0.69, 0.29, non_nascent_alpha)
     LPS_colour = RGBA(0.49, 0.49, 0.49, non_nascent_alpha)
+    new_LPS_colour = RGBA(0.2, 0.2, 0.2, non_nascent_alpha)
     nascent_OmpA_colour = RGBA(0.4, 0.76, 0.65, nascent_alpha)
     nascent_OmpCF_colour = RGBA(0.22, 0.49, 0.72, nascent_alpha)
     nascent_BamA_colour = RGBA(0.89, 0.10, 0.11, nascent_alpha)
     nascent_LptD_colour = RGBA(0.30, 0.69, 0.29, nascent_alpha)
     nascent_LPS_colour = RGBA(0.49, 0.49, 0.49, nascent_alpha)
+    nascent_new_LPS_colour = RGBA(0.2, 0.2, 0.2, nascent_alpha)
 
     #make vectors to store all agent representations
     agent_x_coords = Vector{Float64}()
@@ -193,10 +197,18 @@ function build_plot_objects(agents::AllAgents, dims::SVector{2, Float64}, max_di
         _push_all_agent_data(LptD, params.LptD.radius, LptD_colour, LptD.insertion_state, true)
     end
     for LPS in agents.LPS
-        _push_all_agent_data(LPS, params.LPS.radius, LPS_colour, no_insertion_state, false)
+        if !demarcate_new_LPS_yn || LPS.arrival_time < 0.0
+            _push_all_agent_data(LPS, params.LPS.radius, LPS_colour, no_insertion_state, false)
+        else
+            _push_all_agent_data(LPS, params.LPS.radius, new_LPS_colour, no_insertion_state, false)
+        end
     end
     for nascent_LPS in agents.nascent.nascent_LPS
-        _push_all_agent_data(nascent_LPS, params.LPS.radius, nascent_LPS_colour, no_insertion_state, false)
+        if demarcate_new_LPS_yn
+            _push_all_agent_data(nascent_LPS, params.LPS.radius, nascent_new_LPS_colour, no_insertion_state, false)
+        else
+            _push_all_agent_data(nascent_LPS, params.LPS.radius, nascent_LPS_colour, no_insertion_state, false)
+        end
     end
     for nascent_OMP in agents.nascent.nascent_OMP
         if nascent_OMP.OMP_type == "OmpA"
@@ -302,13 +314,14 @@ Plots all membrane agents to axis `ax`.
 """
 function plot_agents!(ax::Axis, agents::AllAgents, dims::SVector{2, Float64}, 
     max_dims::SVector{2, Float64}, params::AllParams;
-    centering::Union{Tuple{String, Int}, Nothing}=nothing)
+    centering::Union{Tuple{String, Int}, Nothing}=nothing,
+    show_tethers_yn::Bool=true, demarcate_new_LPS_yn::Bool=false)
+
 
     #optionally centre everything around a specific agent
     if !isnothing(centering)
         centre_all_agents!(agents, centering[1], centering[2], dims)
     end
-
     
     #get agent representations for this time step
     (
@@ -322,7 +335,7 @@ function plot_agents!(ax::Axis, agents::AllAgents, dims::SVector{2, Float64},
         tether_y_coords,
         tether_end_x_coords,
         tether_end_y_coords
-    ) = build_plot_objects(agents, dims, max_dims, params)
+    ) = build_plot_objects(agents, dims, max_dims, params; demarcate_new_LPS_yn=demarcate_new_LPS_yn)
 
     #clear current plot and plot representations for this time step
     empty!(ax)
@@ -362,7 +375,7 @@ function plot_agents!(ax::Axis, agents::AllAgents, dims::SVector{2, Float64},
     end
 
     #tethers to plot?
-    if length(tether_x_coords)>0
+    if show_tethers_yn && length(tether_x_coords)>0
         
         #tether points
         scatter!(ax, tether_x_coords, tether_y_coords;
@@ -411,7 +424,10 @@ function make_membrane_movie(out_path::String;
     plot_time_series::Bool=false,
     plot_size::Int=500,
     fps::Int=24, 
-    centering::Union{Tuple{String, Int}, Nothing}=nothing)
+    centering::Union{Tuple{String, Int}, Nothing}=nothing,
+    demarcate_new_LPS_yn::Bool=false,
+    show_tethers_yn::Bool=true
+    )
 
     #check that the out_path exists and contains data
     raw_data_dir = joinpath("out", out_path, "raw_data")
@@ -481,7 +497,11 @@ function make_membrane_movie(out_path::String;
         @load data_fname agents dims
 
         #plot agents
-        plot_agents!(ax, agents, dims, max_dims, params; centering=centering)
+        plot_agents!(ax, agents, dims, max_dims, params; 
+            centering=centering, 
+            demarcate_new_LPS_yn=demarcate_new_LPS_yn, 
+            show_tethers_yn=show_tethers_yn
+        )
 
         #optionally plot time series
         if plot_time_series
@@ -500,14 +520,21 @@ end
 
 
 """
-    make_snapshot(out_path::String, time_val::Float64; centering::Union{Tuple{String, Int}, Nothing}=nothing)
+    make_snapshot(out_path::String, time_val::Float64; 
+        centering::Union{Tuple{String, Int}, Nothing}=nothing,
+        max_dims::Union{SVector{2, Float64}, Nothing}=nothing,
+        demarcate_new_LPS_yn::Bool=false,
+        show_tethers_yn::Bool=true
+    )
 
 Given an `out_path` - which must be a directory within the `out` directory - makes a snapshot
 of the simulation data in `out_path/raw_data` at time value `time_val`.
 """
 function make_snapshot(out_path::String, time_val::Float64;
-    centering::Union{Tuple{String, Int}, Nothing}=nothing,
-    max_dims::Union{SVector{2, Float64}, Nothing}=nothing
+            centering::Union{Tuple{String, Int}, Nothing}=nothing,
+            max_dims::Union{SVector{2, Float64}, Nothing}=nothing,
+            demarcate_new_LPS_yn::Bool=false,
+            show_tethers_yn::Bool=true
     )
 
     #check that the out_path exists and contains data
@@ -551,7 +578,11 @@ function make_snapshot(out_path::String, time_val::Float64;
     hidespines!(ax)
 
     #plot agents
-    plot_agents!(ax, agents, dims, max_dims, params; centering=centering)
+    plot_agents!(ax, agents, dims, max_dims, params; 
+        centering=centering, 
+        demarcate_new_LPS_yn=demarcate_new_LPS_yn, 
+        show_tethers_yn=show_tethers_yn
+    )
 
     #save figure
     if !isdir(joinpath("out", out_path, "snapshots"))
@@ -572,18 +603,27 @@ end
 
 """
     make_snapshots(out_path::String, time_vals::Vector{Float64};
-    centering::Union{Tuple{String, Int}, Nothing}=nothing
+        centering::Union{Tuple{String, Int}, Nothing}=nothing,
+        max_dims::Union{SVector{2, Float64}, Nothing}=nothing,
+        demarcate_new_LPS_yn::Bool=false,
+        show_tethers_yn::Bool=true
     )
 Makes snapshots at multiple time values specified in `time_vals` and saves them to `out_path`.
 Lightweight wrapper around `make_snapshot`.
 """
 function make_snapshots(out_path::String, time_vals::Vector{Float64};
     centering::Union{Tuple{String, Int}, Nothing}=nothing,
-    max_dims::Union{SVector{2, Float64}, Nothing}=nothing
+    max_dims::Union{SVector{2, Float64}, Nothing}=nothing,
+    demarcate_new_LPS_yn::Bool=false,
+    show_tethers_yn::Bool=true
     )
 
     for time_val in time_vals
-        make_snapshot(out_path, time_val; centering=centering, max_dims=max_dims)
+        make_snapshot(out_path, time_val; 
+            centering=centering, 
+            max_dims=max_dims, 
+            demarcate_new_LPS_yn=demarcate_new_LPS_yn, 
+            show_tethers_yn=show_tethers_yn)
     end
 
 end
@@ -598,7 +638,9 @@ makes snapshots for each system at each time value. First determines the maximum
 dimensions across all systems to ensure consistent sizing.
 """
 function make_snapshots_across_sweep(list_of_out_paths::Vector{String}, time_vals::Vector{Float64};
-    centering::Union{Tuple{String, Int}, Nothing}=nothing
+        centering::Union{Tuple{String, Int}, Nothing}=nothing,
+        demarcate_new_LPS_yn::Bool=false,
+        show_tethers_yn::Bool=true
     )
 
     #first work out the maximum dimensions across all systems
@@ -621,7 +663,12 @@ function make_snapshots_across_sweep(list_of_out_paths::Vector{String}, time_val
 
     #now make snapshots for each system at each time value
     for out_path in list_of_out_paths
-        make_snapshots(out_path, time_vals; centering=centering, max_dims=max_dims)
+        make_snapshots(out_path, time_vals; 
+            centering=centering, 
+            max_dims=max_dims, 
+            demarcate_new_LPS_yn=demarcate_new_LPS_yn, 
+            show_tethers_yn=show_tethers_yn
+        )
     end
 
 end
