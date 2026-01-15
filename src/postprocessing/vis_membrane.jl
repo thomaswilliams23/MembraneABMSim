@@ -421,11 +421,13 @@ Note that the index is the index of the agent in the relevant `AllAgents` vector
 the system. This agent must be present at the start of the simulation.
 """
 function make_membrane_movie(out_path::String;
+    frame_inds::Union{Vector{Int}, StepRange{Int, Int}, Nothing}=nothing,
     plot_time_series::Bool=false,
     plot_size::Int=500,
     fps::Int=24, 
     centering::Union{Tuple{String, Int}, Nothing}=nothing,
     demarcate_new_LPS_yn::Bool=false,
+    output_extension::String=".mp4",
     show_tethers_yn::Bool=true
     )
 
@@ -483,14 +485,25 @@ function make_membrane_movie(out_path::String;
     #make a circle marker of unit size
     unit_circle = BezierPath([MoveTo(Point(1,0)), EllipticalArc(Point(0, 0), 1, 1, 0, 0, 2pi)])
 
-    #set up movie
-    movie_path = joinpath("out", out_path, "sim.mp4")
+    #set up output file path
+    if output_extension in [".avi", ".mp4", ".gif"]
+        movie_path = joinpath("out", out_path, "sim$(output_extension)")
+    else
+        error("Output extension $output_extension not recognised. Must be one of .avi, .mp4, .gif")
+    end
+
+    #set up frame indices
+    if isnothing(frame_inds)
+        frame_inds = 0:num_time_steps
+    end
 
     #loop over each output data file and generate a snapshot for the movie
-    Makie.record(fig, movie_path, 0:num_time_steps; framerate=fps) do time_ix
+    frame_count = 0
+    Makie.record(fig, movie_path, frame_inds; framerate=fps) do time_ix
 
-        print("Rendering frame $time_ix of $num_time_steps\r")
-        
+        frame_count += 1
+        print("Rendering frame $frame_count of $(length(frame_inds))\r")
+
         #load in data for this time step
         time_val = time_ix * params.system.vis_dt
         data_fname = joinpath("out", out_path, "raw_data", "sys_data_$(time_ix).jld2")
