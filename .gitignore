@@ -11,3 +11,7 @@ TMP_*.jl
 #ignore workbooks
 workbooks/*.ipynb
 workbooks/*.jl
+
+#some temporary configs for making figures
+config/sweep/LPS_stickiness_big_sim_OLD.json
+config/simulation/LPS_stickiness_big_sim/defaults_OLD.json

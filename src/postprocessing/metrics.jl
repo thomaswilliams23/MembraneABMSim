@@ -457,12 +457,10 @@ end
 """
     get_num_OmpA_agents_by_BAM(params::AllParams)
 
-Counts the number of OmpA agents inserted by each BAM. Relies on analysing nascent agent data, 
-so can only process entire trajectories, not individual time points.
+Counts the number of OmpA agents inserted by each BAM, returns an m x n array where m is the number of time indices
+and n is the final number of BAMs.
 """
 function get_num_OmpA_agents_by_BAM(params::AllParams)
-
-    #TODO: redo this function to compute time series (or write another function for that)
 
     # parse params
     out_path = joinpath("out", params.system.output_dir)
@@ -477,11 +475,16 @@ function get_num_OmpA_agents_by_BAM(params::AllParams)
     BamA_ix_to_vector_ix = Dict{Int, Int}(
         BamA.index => ix for (ix, BamA) in enumerate(agents.OMP.BamA)
     )
-    num_OmpA_by_BAM = zeros(Int, length(agents.OMP.BamA))
+    num_OmpA_by_BAM = zeros(Int, max_time_ix+1, length(agents.OMP.BamA))
     nascent_OMPs_observed = Set{Int}()
 
     # loop through time points
     for time_ix in 0:max_time_ix
+
+        if time_ix > 0
+            #carry forward previous counts
+            num_OmpA_by_BAM[time_ix+1, :] .= num_OmpA_by_BAM[time_ix, :]
+        end
 
         #load in system state at this time point
         fname_this_time_ix = joinpath(raw_data_dir, @sprintf("sys_data_%d.jld2", time_ix))
@@ -492,7 +495,7 @@ function get_num_OmpA_agents_by_BAM(params::AllParams)
             if nascent_OMP.OMP_type == "OmpA" && !(nascent_OMP.index in nascent_OMPs_observed)
                 BamA_ix = nascent_OMP.inserting_agent_index
                 vector_ix = BamA_ix_to_vector_ix[BamA_ix]
-                num_OmpA_by_BAM[vector_ix] += 1
+                num_OmpA_by_BAM[time_ix+1, vector_ix] += 1
                 push!(nascent_OMPs_observed, nascent_OMP.index)
             end
         end
