@@ -508,3 +508,24 @@ function get_num_OmpA_agents_by_BAM(params::AllParams)
     return num_OmpA_by_BAM
 
 end
+
+
+
+"""
+    get_LptD_insertion_times(params::AllParams)
+
+Returns a vector of the insertion times of all LptD agents.
+"""
+function get_LptD_insertion_times(params::AllParams)
+
+    #load final system state
+    out_path = joinpath("out", params.system.output_dir)
+    raw_data_dir = joinpath(out_path, "raw_data")
+    max_time_ix = round(Int, params.system.t_max / params.system.vis_dt)
+    fname_final = joinpath(raw_data_dir, @sprintf("sys_data_%d.jld2", max_time_ix))
+    @load fname_final agents dims
+
+    #extract insertion times
+    insertion_times = [LptD.arrival_time for LptD in agents.OMP.LptD]
+    return insertion_times
+end
