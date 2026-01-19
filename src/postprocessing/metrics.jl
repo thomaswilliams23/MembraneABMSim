@@ -335,7 +335,10 @@ function get_distance_between_BAMs(agents::AllAgents, dims::SVector{2, Float64},
     distances = Array{Float64}(undef, num_BamAs, num_BamAs)
     for i in 1:(num_BamAs-1)
         for j in (i+1):num_BamAs
-            dist = shortest_distance(agents.OMP.BamA[i].position, agents.OMP.BamA[j].position, dims)
+            dist = max(
+                shortest_distance(agents.OMP.BamA[i].position, agents.OMP.BamA[j].position, dims)-params.BamA.radius*2,
+                0.0
+            )
             distances[i, j] = dist
             distances[j, i] = dist
         end
