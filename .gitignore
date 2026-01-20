@@ -16,3 +16,4 @@ workbooks/*.jl
 config/sweep/*_OLD.json
 config/simulation/LPS_stickiness_big_sim/defaults_OLD.json
 config/simulation/LPS_stickiness_and_diff/defaults_OLD.json
+config/simulation/stickiness/defaults_OLD.json
