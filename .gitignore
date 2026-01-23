@@ -14,6 +14,7 @@ workbooks/*.jl
 
 #some temporary configs for making figures
 config/sweep/*_OLD.json
+config/simulation/BAM_Lpt_competition/defaults_OLD.json
 config/simulation/LPS_stickiness_big_sim/defaults_OLD.json
 config/simulation/LPS_stickiness_and_diff/defaults_OLD.json
 config/simulation/stickiness/defaults_OLD.json
