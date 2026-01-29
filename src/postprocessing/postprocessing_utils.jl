@@ -18,8 +18,8 @@ function get_time_series(func::Function, out_path::String, params::AllParams)
     first_eval = func(agents, dims, params)
     time_series = Vector{typeof(first_eval)}(undef, max_time_ix+1)
     
-    #iterate through time points
-    Threads.@threads for time_ix in 0:max_time_ix
+    #iterate through time points 
+    for time_ix in 0:max_time_ix
 
         #load in system state at this time point
         fname_this_time_ix = joinpath(raw_data_dir, @sprintf("sys_data_%d.jld2", time_ix))
@@ -121,7 +121,7 @@ function analyse_sweep(func::Function, data_name::String, sweep_config_fname::St
     # Iterate over all parameter combinations
     sim_ix = 0
     num_sims = length(keys(sim_dict))
-    Threads.@threads for sim_path in [_ for _ in keys(sim_dict)]
+    for sim_path in [_ for _ in keys(sim_dict)]
     
         sim_config_fname = joinpath("out", sweep_params.output_base_dir, sim_path, "config.json")
 
