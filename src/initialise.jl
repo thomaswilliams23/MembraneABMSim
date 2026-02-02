@@ -32,6 +32,11 @@ function initialise_system_cpu(params::AllParams; clear_existing_output::Bool=fa
             println("Initialising model with specified agent positions...")
         end
         agents, grid_size, grid, system_flat_cpu = initialise_system_specify_positions(params; suppress_prints=suppress_prints)
+    elseif params.init.method == "from_checkpoint"
+        if !suppress_prints
+            println("Initialising model by continuing from checkpoint...")
+        end
+        agents, grid_size, grid, system_flat_cpu = initialise_system_from_checkpoint(params; suppress_prints=suppress_prints)
     else
         #TODO: implement other initialisation methods?
         error("Initialisation type $(params.initialisation.init_type) not recognised.")
@@ -731,6 +736,47 @@ function initialise_system_specify_positions(params::AllParams; suppress_prints:
 end
 
 
+
+
+"""
+    initialise_system_from_checkpoint(params::AllParams; suppress_prints::Bool=false)
+
+Initialises the simulation system by loading from a checkpoint file specified in the parameters.
+"""
+function initialise_system_from_checkpoint(params::AllParams; suppress_prints::Bool=false)
+
+    #initialise the system
+    grid_size, grid = initialise_grid(params)
+    system_flat_cpu = initialise_flat_cpu(params)
+
+    #load in agents and dims from checkpoint
+    @assert !isnothing(params.init.checkpoint_file) "No checkpoint file specified in params.init.checkpoint_file for 'from_checkpoint' initialisation method."
+    @assert isfile(params.init.checkpoint_file) "Checkpoint file specified in params.init.checkpoint_file does not exist: $(params.init.checkpoint_file)"
+    if !suppress_prints
+        println("Loading checkpoint file from: $(params.init.checkpoint_file)")
+    end
+    @load params.init.checkpoint_file agents dims
+
+    #set grid dimensions
+    grid_size.dims = dims
+    grid_size.num_agents = (
+        length(agents.OMP.OmpA) + 
+        length(agents.OMP.OmpCF) + 
+        length(agents.OMP.LptD) + 
+        length(agents.OMP.BamA) + 
+        length(agents.LPS) + 
+        length(agents.nascent.nascent_OMP) + 
+        length(agents.nascent.nascent_LPS)
+    )
+
+    #populate data structures
+    rebuild_grid!(grid_size, grid, agents, params.force.sensing_radius)
+    compile_flat_system_data_cpu!(system_flat_cpu, agents, grid_size, grid, params)
+    put_grid_in_sorted_order!(grid_size, grid, system_flat_cpu)
+    grid_size.num_agents_changed = false
+
+    return (agents, grid_size, grid, system_flat_cpu)
+end
 
 
 """
