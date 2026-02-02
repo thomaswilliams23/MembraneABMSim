@@ -15,5 +15,6 @@
     },
     "num_reps": 10,
     "default_config": "config/simulation/BAM_Lpt_competition/contd.json",
-    "output_base_dir": "stickiness_sweep_BAM_Lpt_contd"
+    "output_base_dir": "stickiness_sweep_BAM_Lpt_contd",
+    "checkpoint_sweep_config": "config/sweep/stickiness_BAM_Lpt.json"
 }
