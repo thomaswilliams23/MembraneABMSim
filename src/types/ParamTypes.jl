@@ -87,6 +87,7 @@ struct InitConditions
     method::String
     equilibration_time::Union{Nothing, Float64}
     complexes_assembled::Union{Nothing, Bool}
+    checkpoint_file::Union{Nothing, String}
 end
 
 """
@@ -178,6 +179,7 @@ struct SweepParams
     num_reps::Int
     default_config::String
     output_base_dir::String
+    checkpoint_sweep_config::Union{Nothing, String}
 end
 
 
