@@ -8,6 +8,31 @@ function get_membrane_size(agents::AllAgents, dims::SVector{2, Float64}, params:
 end
 
 
+"""
+    get_num_agents(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+
+Counts agents of all types in the system.
+"""
+function get_num_agents(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+    return Dict(
+        "OmpA" => length(agents.OMP.OmpA),
+        "OmpCF" => length(agents.OMP.OmpCF),
+        "LptD" => length(agents.OMP.LptD),
+        "BamA" => length(agents.OMP.BamA),
+        "LPS" => length(agents.LPS)
+    )
+end
+
+
+"""
+    get_num_OmpA_agents(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+
+Counts the number of OmpA agents in the system.
+"""
+function get_num_OmpA_agents(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+    return length(agents.OMP.OmpA)
+end
+
 
 """
     get_num_LPS_bordering_OMP(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
@@ -290,27 +315,61 @@ end
 
 
 """
+    get_BAM_states(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+
+Returns a vector of the states of all BamA agents.
+"""
+function get_BAM_states(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+    list_of_states = [BAM.insertion_state for BAM in agents.OMP.BamA]
+    return list_of_states
+end
+
+
+"""
+    get_distance_between_BamAs(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+
+Returns a matrix of the pairwise distances between all BamA agents.
+"""
+function get_distance_between_BAMs(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+    num_BamAs = length(agents.OMP.BamA)
+    distances = Array{Float64}(undef, num_BamAs, num_BamAs)
+    for i in 1:(num_BamAs-1)
+        for j in (i+1):num_BamAs
+            dist = max(
+                shortest_distance(agents.OMP.BamA[i].position, agents.OMP.BamA[j].position, dims)-params.BamA.radius*2,
+                0.0
+            )
+            distances[i, j] = dist
+            distances[j, i] = dist
+        end
+    end
+    return distances
+end
+
+
+
+"""
     get_cutoff_time(params::AllParams)
 
-Computes the time at which the membrane size plateaus (i.e. no further agents can be inserted).
+Computes the time at which the OmpA number plateaus (i.e. no further agents can be inserted).
 """
 function get_cutoff_time(params::AllParams)
 
-    # get final membrane size
+    # get final OmpA number
     out_path = joinpath("out", params.system.output_dir)
     raw_data_dir = joinpath(out_path, "raw_data")
     max_time_ix = round(Int, params.system.t_max / params.system.vis_dt)
     fname_final = joinpath(raw_data_dir, @sprintf("sys_data_%d.jld2", max_time_ix))
     @load fname_final agents dims
-    final_membrane_size = get_membrane_size(agents, dims, params)
+    final_OmpA_number = get_num_OmpA_agents(agents, dims, params)
 
-    # iterate backwards through time points to find when membrane size plateaus
+    # iterate backwards through time points to find when OmpA number plateaus
     cutoff_time = params.system.t_max
     for time_ix in (max_time_ix-1):-1:0
         fname_this_time_ix = joinpath(raw_data_dir, @sprintf("sys_data_%d.jld2", time_ix))
         @load fname_this_time_ix agents dims
-        membrane_size_this_time = get_membrane_size(agents, dims, params)
-        if membrane_size_this_time < final_membrane_size
+        OmpA_number_this_time = get_num_OmpA_agents(agents, dims, params)
+        if OmpA_number_this_time < final_OmpA_number
             cutoff_time = time_ix * params.system.vis_dt
             break
         end
@@ -398,3 +457,75 @@ function get_squared_displacement(params::AllParams)
 end
 
 
+"""
+    get_num_OmpA_agents_by_BAM(params::AllParams)
+
+Counts the number of OmpA agents inserted by each BAM, returns an m x n array where m is the number of time indices
+and n is the final number of BAMs.
+"""
+function get_num_OmpA_agents_by_BAM(params::AllParams)
+
+    # parse params
+    out_path = joinpath("out", params.system.output_dir)
+    raw_data_dir = joinpath(out_path, "raw_data")
+    max_time_ix = round(Int, params.system.t_max / params.system.vis_dt)
+
+    # get final list of BamAs - we will use their indices as keys for the output dict
+    fname_final = joinpath(raw_data_dir, @sprintf("sys_data_%d.jld2", max_time_ix))
+    @load fname_final agents dims
+
+    # initialise
+    BamA_ix_to_vector_ix = Dict{Int, Int}(
+        BamA.index => ix for (ix, BamA) in enumerate(agents.OMP.BamA)
+    )
+    num_OmpA_by_BAM = zeros(Int, max_time_ix+1, length(agents.OMP.BamA))
+    nascent_OMPs_observed = Set{Int}()
+
+    # loop through time points
+    for time_ix in 0:max_time_ix
+
+        if time_ix > 0
+            #carry forward previous counts
+            num_OmpA_by_BAM[time_ix+1, :] .= num_OmpA_by_BAM[time_ix, :]
+        end
+
+        #load in system state at this time point
+        fname_this_time_ix = joinpath(raw_data_dir, @sprintf("sys_data_%d.jld2", time_ix))
+        @load fname_this_time_ix agents dims
+
+        #loop through nascent OMPs to find those that have just inserted
+        for nascent_OMP in agents.nascent.nascent_OMP
+            if nascent_OMP.OMP_type == "OmpA" && !(nascent_OMP.index in nascent_OMPs_observed)
+                BamA_ix = nascent_OMP.inserting_agent_index
+                vector_ix = BamA_ix_to_vector_ix[BamA_ix]
+                num_OmpA_by_BAM[time_ix+1, vector_ix] += 1
+                push!(nascent_OMPs_observed, nascent_OMP.index)
+            end
+        end
+
+    end
+
+    return num_OmpA_by_BAM
+
+end
+
+
+
+"""
+    get_LptD_insertion_times(params::AllParams)
+
+Returns a vector of the insertion times of all LptD agents.
+"""
+function get_LptD_insertion_times(params::AllParams)
+
+    #load final system state
+    out_path = joinpath("out", params.system.output_dir)
+    raw_data_dir = joinpath(out_path, "raw_data")
+    max_time_ix = round(Int, params.system.t_max / params.system.vis_dt)
+    fname_final = joinpath(raw_data_dir, @sprintf("sys_data_%d.jld2", max_time_ix))
+    @load fname_final agents dims
+
+    #extract insertion times
+    insertion_times = [LptD.arrival_time for LptD in agents.OMP.LptD]
+    return insertion_times
+end

@@ -11,12 +11,15 @@ function get_time_series(func::Function, out_path::String, params::AllParams)
     #raw data directory
     raw_data_dir = joinpath(out_path, "raw_data")
 
-    #allocate memory
+    #allocate memory - assumes function evaluations always return the same type
     max_time_ix = round(Int, params.system.t_max / params.system.vis_dt)
-    time_series = Vector{Float64}(undef, max_time_ix+1)
-
-    #iterate through time points
-    Threads.@threads for time_ix in 0:max_time_ix
+    fname_first = joinpath(raw_data_dir, @sprintf("sys_data_%d.jld2", 0))
+    @load fname_first agents dims
+    first_eval = func(agents, dims, params)
+    time_series = Vector{typeof(first_eval)}(undef, max_time_ix+1)
+    
+    #iterate through time points 
+    for time_ix in 0:max_time_ix
 
         #load in system state at this time point
         fname_this_time_ix = joinpath(raw_data_dir, @sprintf("sys_data_%d.jld2", time_ix))
@@ -41,10 +44,12 @@ then saves the results to a JLD2 file in the simulation output directory.
 """
 function analyse_sim(func::Function, data_name::String, simulation_config_fname::String;
                      get_time_series_yn::Bool=false, evaluate_final_state_yn::Bool=false,
-                     analyse_whole_traj_yn::Bool=false)
+                     evaluate_initial_state_yn::Bool=false, analyse_whole_traj_yn::Bool=false)
 
 
     @assert !(get_time_series_yn && evaluate_final_state_yn) "Cannot set both get_time_series and evaluate_final_state to true"
+    @assert !(get_time_series_yn && evaluate_initial_state_yn) "Cannot set both get_time_series and evaluate_initial_state to true"
+    @assert !(evaluate_final_state_yn && evaluate_initial_state_yn) "Cannot set both evaluate_final_state and evaluate_initial_state to true"
 
     # Load the simulation configuration
     params_this_sim = parse_config(simulation_config_fname)
@@ -55,6 +60,16 @@ function analyse_sim(func::Function, data_name::String, simulation_config_fname:
     if get_time_series_yn
         #apply the function to each time point
         result = get_time_series(func, out_path, params_this_sim)
+    elseif evaluate_initial_state_yn
+        #apply the function only to the initial system state
+
+        #load in initial state
+        raw_data_dir = joinpath(out_path, "raw_data")
+        fname_initial = joinpath(raw_data_dir, @sprintf("sys_data_%d.jld2", 0))
+        @load fname_initial agents dims
+
+        #apply function
+        result = func(agents, dims, params_this_sim)
     elseif evaluate_final_state_yn
         #apply the function only to the final system state
 
@@ -95,7 +110,7 @@ then saves the results to a JLD2 file in the sweep output directory.
 """
 function analyse_sweep(func::Function, data_name::String, sweep_config_fname::String;
                        get_time_series_yn::Bool=false, evaluate_final_state_yn::Bool=false,
-                       analyse_whole_traj_yn::Bool=false)
+                       evaluate_initial_state_yn::Bool=false, analyse_whole_traj_yn::Bool=false)
 
     @assert !(get_time_series_yn && evaluate_final_state_yn) "Cannot set both get_time_series and evaluate_final_state to true"
 
@@ -106,13 +121,14 @@ function analyse_sweep(func::Function, data_name::String, sweep_config_fname::St
     # Iterate over all parameter combinations
     sim_ix = 0
     num_sims = length(keys(sim_dict))
-    Threads.@threads for sim_path in [_ for _ in keys(sim_dict)]
+    for sim_path in [_ for _ in keys(sim_dict)]
     
         sim_config_fname = joinpath("out", sweep_params.output_base_dir, sim_path, "config.json")
 
         analyse_sim(func, data_name, sim_config_fname;
                     get_time_series_yn=get_time_series_yn, 
                     evaluate_final_state_yn=evaluate_final_state_yn,
+                    evaluate_initial_state_yn=evaluate_initial_state_yn,
                     analyse_whole_traj_yn=analyse_whole_traj_yn)
 
         print("Processed sim $sim_ix of $num_sims\r")

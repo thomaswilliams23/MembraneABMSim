@@ -24,7 +24,8 @@ end
 
 
 """
-    build_plot_objects(agents::AllAgents, dims::SVector{2, Float64}, max_dims::SVector{2, Float64}, params::AllParams)
+    build_plot_objects(agents::AllAgents, dims::SVector{2, Float64}, max_dims::SVector{2, Float64}, params::AllParams;
+        demarcate_new_LPS_yn::Bool=false)
 
 Given a system state (specifically, an AllAgents structure, `agents`, and a grid dimensions 
 vector `dims`), extracts and returns vectors of data necessary for plotting, centered within
@@ -42,7 +43,8 @@ the maximal membrane domain
     tether_end_y_coords.    # y coordinates of each tethered agent (for plotting tethers)
 )
 """
-function build_plot_objects(agents::AllAgents, dims::SVector{2, Float64}, max_dims::SVector{2, Float64}, params::AllParams)
+function build_plot_objects(agents::AllAgents, dims::SVector{2, Float64}, max_dims::SVector{2, Float64}, params::AllParams;
+    demarcate_new_LPS_yn::Bool=false)
 
     #colour defaults
     non_nascent_alpha = 0.7
@@ -52,11 +54,13 @@ function build_plot_objects(agents::AllAgents, dims::SVector{2, Float64}, max_di
     BamA_colour = RGBA(0.89, 0.10, 0.11, non_nascent_alpha)
     LptD_colour = RGBA(0.30, 0.69, 0.29, non_nascent_alpha)
     LPS_colour = RGBA(0.49, 0.49, 0.49, non_nascent_alpha)
+    new_LPS_colour = RGBA(0.2, 0.2, 0.2, non_nascent_alpha)
     nascent_OmpA_colour = RGBA(0.4, 0.76, 0.65, nascent_alpha)
     nascent_OmpCF_colour = RGBA(0.22, 0.49, 0.72, nascent_alpha)
     nascent_BamA_colour = RGBA(0.89, 0.10, 0.11, nascent_alpha)
     nascent_LptD_colour = RGBA(0.30, 0.69, 0.29, nascent_alpha)
     nascent_LPS_colour = RGBA(0.49, 0.49, 0.49, nascent_alpha)
+    nascent_new_LPS_colour = RGBA(0.2, 0.2, 0.2, nascent_alpha)
 
     #make vectors to store all agent representations
     agent_x_coords = Vector{Float64}()
@@ -193,10 +197,18 @@ function build_plot_objects(agents::AllAgents, dims::SVector{2, Float64}, max_di
         _push_all_agent_data(LptD, params.LptD.radius, LptD_colour, LptD.insertion_state, true)
     end
     for LPS in agents.LPS
-        _push_all_agent_data(LPS, params.LPS.radius, LPS_colour, no_insertion_state, false)
+        if !demarcate_new_LPS_yn || LPS.arrival_time < 0.0
+            _push_all_agent_data(LPS, params.LPS.radius, LPS_colour, no_insertion_state, false)
+        else
+            _push_all_agent_data(LPS, params.LPS.radius, new_LPS_colour, no_insertion_state, false)
+        end
     end
     for nascent_LPS in agents.nascent.nascent_LPS
-        _push_all_agent_data(nascent_LPS, params.LPS.radius, nascent_LPS_colour, no_insertion_state, false)
+        if demarcate_new_LPS_yn
+            _push_all_agent_data(nascent_LPS, params.LPS.radius, nascent_new_LPS_colour, no_insertion_state, false)
+        else
+            _push_all_agent_data(nascent_LPS, params.LPS.radius, nascent_LPS_colour, no_insertion_state, false)
+        end
     end
     for nascent_OMP in agents.nascent.nascent_OMP
         if nascent_OMP.OMP_type == "OmpA"
@@ -293,6 +305,108 @@ function centre_all_agents!(agents::AllAgents, agent_type::String, agent_index::
 end
 
 
+"""
+    plot_agents!(ax::Axis, agents::AllAgents, dims::SVector{2, Float64}, 
+                 max_dims::SVector{2, Float64}, params::AllParams;
+                 centering::Union{Tuple{String, Int}, Nothing}=nothing)
+
+Plots all membrane agents to axis `ax`.
+"""
+function plot_agents!(ax::Axis, agents::AllAgents, dims::SVector{2, Float64}, 
+    max_dims::SVector{2, Float64}, params::AllParams;
+    centering::Union{Tuple{String, Int}, Nothing}=nothing,
+    show_tethers_yn::Bool=true, demarcate_new_LPS_yn::Bool=false)
+
+
+    #optionally centre everything around a specific agent
+    if !isnothing(centering)
+        centre_all_agents!(agents, centering[1], centering[2], dims)
+    end
+    
+    #get agent representations for this time step
+    (
+        membrane_obj, 
+        agent_x_coords, 
+        agent_y_coords, 
+        agent_radii, 
+        agent_colours,
+        insertion_states,
+        tether_x_coords,
+        tether_y_coords,
+        tether_end_x_coords,
+        tether_end_y_coords
+    ) = build_plot_objects(agents, dims, max_dims, params; demarcate_new_LPS_yn=demarcate_new_LPS_yn)
+
+    #clear current plot and plot representations for this time step
+    empty!(ax)
+
+    #plot membrane background
+    poly!(ax, membrane_obj;
+        color = RGBA(0.5, 0.5, 0.5, 0.2)
+    )
+
+    #agents
+    unit_circle = BezierPath([MoveTo(Point(1,0)), EllipticalArc(Point(0, 0), 1, 1, 0, 0, 2pi)])
+    scatter!(ax, agent_x_coords, agent_y_coords; 
+        marker=unit_circle, 
+        markersize = agent_radii, 
+        markerspace=:data, 
+        color = agent_colours
+    )
+
+    #plot outlines to indicate insertion states
+    for (i, ins_state) in enumerate(insertion_states)
+        if ins_state=="bound"
+            agent_colour = agent_colours[i]
+            poly!(ax, Circle(Point2f(agent_x_coords[i], agent_y_coords[i]), agent_radii[i]);
+                strokecolor = RGBA(agent_colour.r, agent_colour.g, agent_colour.b, 1.0),
+                linestyle = :dash,
+                strokewidth = 4,
+                color = :transparent
+            )
+        elseif ins_state=="embedding"
+            agent_colour = agent_colours[i]
+            poly!(ax, Circle(Point2f(agent_x_coords[i], agent_y_coords[i]), agent_radii[i]);
+                strokecolor = RGBA(agent_colour.r, agent_colour.g, agent_colour.b, 1.0),
+                strokewidth = 4,
+                color = :transparent
+            )
+        end
+    end
+
+    #tethers to plot?
+    if show_tethers_yn && length(tether_x_coords)>0
+        
+        #tether points
+        scatter!(ax, tether_x_coords, tether_y_coords;
+            marker = :xcross,
+            markersize = 10,
+            color = :red
+        )
+
+        #tethers
+        for ix in eachindex(tether_x_coords)
+            lines!(
+                [tether_x_coords[ix], tether_end_x_coords[ix]], [tether_y_coords[ix], tether_end_y_coords[ix]];
+                color = :black,
+                linestyle = (:dash, :dense),
+                linewidth = 1
+            )
+        end
+    end
+
+    #now plot a mask to cover everything outside the membrane
+    membrane_mask = Polygon(
+        Point2f[[0.0, 0.0], [max_dims[1], 0.0], max_dims, [0.0, max_dims[2]]],
+        [membrane_obj]
+    )
+    poly!(ax, membrane_mask;
+        color=:white
+    )
+
+    return
+end
+
 
 
 """
@@ -307,8 +421,15 @@ Note that the index is the index of the agent in the relevant `AllAgents` vector
 the system. This agent must be present at the start of the simulation.
 """
 function make_membrane_movie(out_path::String;
+    frame_inds::Union{Vector{Int}, StepRange{Int, Int}, Nothing}=nothing,
+    plot_time_series::Bool=false,
+    plot_size::Int=500,
     fps::Int=24, 
-    centering::Union{Tuple{String, Int}, Nothing}=nothing)
+    centering::Union{Tuple{String, Int}, Nothing}=nothing,
+    demarcate_new_LPS_yn::Bool=false,
+    output_extension::String=".mp4",
+    show_tethers_yn::Bool=true
+    )
 
     #check that the out_path exists and contains data
     raw_data_dir = joinpath("out", out_path, "raw_data")
@@ -330,8 +451,14 @@ function make_membrane_movie(out_path::String;
     max_dims = dims
 
     #initialise figure
-    fig = Figure()
-    ax = Axis(fig[1,1];
+    if plot_time_series
+        fig = Figure(size = (2*plot_size, plot_size))
+    else
+        fig = Figure(size = (plot_size, plot_size))
+    end
+    gl = fig[1,1] = GridLayout()
+
+    ax = Axis(gl[1,1];
         backgroundcolor = :transparent,
         xgridvisible = false,
         ygridvisible = false,
@@ -342,108 +469,60 @@ function make_membrane_movie(out_path::String;
     hidedecorations!(ax; grid=false)
     hidespines!(ax)
 
+    #optionally initialise a time series plot
+    if plot_time_series
+        max_size = 1.2 * max_dims[1]*max_dims[2]
+        ax_ts = Axis(gl[1,2];
+            xlabel = "Time",
+            ylabel = "Membrane Size",
+            limits = ((0, params.system.t_max), (0, max_size))
+        )
+        colsize!(gl, 1, Relative(0.5))
+        colsize!(gl, 2, Relative(0.5))
+        membrane_size_ts = Float64[]
+    end
+
     #make a circle marker of unit size
     unit_circle = BezierPath([MoveTo(Point(1,0)), EllipticalArc(Point(0, 0), 1, 1, 0, 0, 2pi)])
 
-    #set up movie
-    movie_path = joinpath("out", out_path, "sim.mp4")
+    #set up output file path
+    if output_extension in [".avi", ".mp4", ".gif"]
+        movie_path = joinpath("out", out_path, "sim$(output_extension)")
+    else
+        error("Output extension $output_extension not recognised. Must be one of .avi, .mp4, .gif")
+    end
+
+    #set up frame indices
+    if isnothing(frame_inds)
+        frame_inds = 0:num_time_steps
+    end
 
     #loop over each output data file and generate a snapshot for the movie
-    Makie.record(fig, movie_path, 0:num_time_steps; framerate=fps) do time_ix
+    frame_count = 0
+    Makie.record(fig, movie_path, frame_inds; framerate=fps) do time_ix
 
-        print("Rendering frame $time_ix of $num_time_steps\r")
-        
+        frame_count += 1
+        print("Rendering frame $frame_count of $(length(frame_inds))\r")
+
         #load in data for this time step
         time_val = time_ix * params.system.vis_dt
         data_fname = joinpath("out", out_path, "raw_data", "sys_data_$(time_ix).jld2")
         @load data_fname agents dims
 
+        #plot agents
+        plot_agents!(ax, agents, dims, max_dims, params; 
+            centering=centering, 
+            demarcate_new_LPS_yn=demarcate_new_LPS_yn, 
+            show_tethers_yn=show_tethers_yn
+        )
 
-        #optionally centre everything around a specific agent
-        if !isnothing(centering)
-            centre_all_agents!(agents, centering[1], centering[2], dims)
+        #optionally plot time series
+        if plot_time_series
+            empty!(ax_ts)
+            membrane_size = dims[1] * dims[2]
+            push!(membrane_size_ts, membrane_size)
+            lines!(ax_ts, (0:time_ix) .* params.system.vis_dt, membrane_size_ts; color=:blue, linewidth=2)
         end
-
-        
-        #get agent representations for this time step
-        (
-            membrane_obj, 
-            agent_x_coords, 
-            agent_y_coords, 
-            agent_radii, 
-            agent_colours,
-            insertion_states,
-            tether_x_coords,
-            tether_y_coords,
-            tether_end_x_coords,
-            tether_end_y_coords
-        ) = build_plot_objects(agents, dims, max_dims, params)
-
-        #clear current plot and plot representations for this time step
-        empty!(ax)
-
-        #plot membrane background
-        poly!(ax, membrane_obj;
-            color = RGBA(0.5, 0.5, 0.5, 0.2)
-        )
-
-        #agents
-        scatter!(ax, agent_x_coords, agent_y_coords; 
-            marker=unit_circle, 
-            markersize = agent_radii, 
-            markerspace=:data, 
-            color = agent_colours
-        )
-
-        #plot outlines to indicate insertion states
-        for (i, ins_state) in enumerate(insertion_states)
-            if ins_state=="bound"
-                agent_colour = agent_colours[i]
-                poly!(ax, Circle(Point2f(agent_x_coords[i], agent_y_coords[i]), agent_radii[i]);
-                    strokecolor = RGBA(agent_colour.r, agent_colour.g, agent_colour.b, 1.0),
-                    linestyle = :dash,
-                    strokewidth = 4,
-                    color = :transparent
-                )
-            elseif ins_state=="embedding"
-                agent_colour = agent_colours[i]
-                poly!(ax, Circle(Point2f(agent_x_coords[i], agent_y_coords[i]), agent_radii[i]);
-                    strokecolor = RGBA(agent_colour.r, agent_colour.g, agent_colour.b, 1.0),
-                    strokewidth = 4,
-                    color = :transparent
-                )
-            end
-        end
-
-        #tethers to plot?
-        if length(tether_x_coords)>0
-            
-            #tether points
-            scatter!(ax, tether_x_coords, tether_y_coords;
-                marker = :xcross,
-                markersize = 10,
-                color = :red
-            )
-
-            #tethers
-            for ix = 1:length(tether_x_coords)
-                lines!(
-                    [tether_x_coords[ix], tether_end_x_coords[ix]], [tether_y_coords[ix], tether_end_y_coords[ix]];
-                    color = :black,
-                    linestyle = (:dash, :dense),
-                    linewidth = 1
-                )
-            end
-        end
-
-        #now plot a mask to cover everything outside the membrane
-        membrane_mask = Polygon(
-            Point2f[[0.0, 0.0], [max_dims[1], 0.0], max_dims, [0.0, max_dims[2]]],
-            [membrane_obj]
-        )
-        poly!(ax, membrane_mask;
-            color=:white
-        )
 
         
     end
@@ -454,14 +533,21 @@ end
 
 
 """
-    make_snapshot(out_path::String, time_val::Float64; centering::Union{Tuple{String, Int}, Nothing}=nothing)
+    make_snapshot(out_path::String, time_val::Float64; 
+        centering::Union{Tuple{String, Int}, Nothing}=nothing,
+        max_dims::Union{SVector{2, Float64}, Nothing}=nothing,
+        demarcate_new_LPS_yn::Bool=false,
+        show_tethers_yn::Bool=true
+    )
 
 Given an `out_path` - which must be a directory within the `out` directory - makes a snapshot
 of the simulation data in `out_path/raw_data` at time value `time_val`.
 """
 function make_snapshot(out_path::String, time_val::Float64;
-    centering::Union{Tuple{String, Int}, Nothing}=nothing,
-    max_dims::Union{SVector{2, Float64}, Nothing}=nothing
+            centering::Union{Tuple{String, Int}, Nothing}=nothing,
+            max_dims::Union{SVector{2, Float64}, Nothing}=nothing,
+            demarcate_new_LPS_yn::Bool=false,
+            show_tethers_yn::Bool=true
     )
 
     #check that the out_path exists and contains data
@@ -491,25 +577,6 @@ function make_snapshot(out_path::String, time_val::Float64;
     data_fname = joinpath("out", out_path, "raw_data", "sys_data_$(time_ix).jld2")
     @load data_fname agents dims
 
-    #optionally centre everything around a specific agent
-    if !isnothing(centering)
-        centre_all_agents!(agents, centering[1], centering[2], dims)
-    end
-
-    #get agent representations for this time step
-    (
-        membrane_obj, 
-        agent_x_coords, 
-        agent_y_coords, 
-        agent_radii, 
-        agent_colours,
-        insertion_states,
-        tether_x_coords,
-        tether_y_coords,
-        tether_end_x_coords,
-        tether_end_y_coords
-    ) = build_plot_objects(agents, dims, max_dims, params)
-
     #initialise figure
     fig = Figure()
     ax = Axis(fig[1,1];
@@ -523,70 +590,11 @@ function make_snapshot(out_path::String, time_val::Float64;
     hidedecorations!(ax; grid=false)
     hidespines!(ax)
 
-    #make a circle marker of unit size
-    unit_circle = BezierPath([MoveTo(Point(1,0)), EllipticalArc(Point(0, 0), 1, 1, 0, 0, 2pi)])
-
-    #plot membrane background
-    poly!(ax, membrane_obj;
-        color = RGBA(0.5, 0.5, 0.5, 0.2)
-    )
-
-    #agents
-    scatter!(ax, agent_x_coords, agent_y_coords; 
-        marker=unit_circle, 
-        markersize = agent_radii, 
-        markerspace=:data, 
-        color = agent_colours
-    )
-
-    #plot outlines to indicate insertion states
-    for (i, ins_state) in enumerate(insertion_states)
-        if ins_state=="bound"
-            agent_colour = agent_colours[i]
-            poly!(ax, Circle(Point2f(agent_x_coords[i], agent_y_coords[i]), agent_radii[i]);
-                strokecolor = RGBA(agent_colour.r, agent_colour.g, agent_colour.b, 1.0),
-                linestyle = :dash,
-                strokewidth = 4,
-                color = :transparent
-            )
-        elseif ins_state=="embedding"
-            agent_colour = agent_colours[i]
-            poly!(ax, Circle(Point2f(agent_x_coords[i], agent_y_coords[i]), agent_radii[i]);
-                strokecolor = RGBA(agent_colour.r, agent_colour.g, agent_colour.b, 1.0),
-                strokewidth = 4,
-                color = :transparent
-            )
-        end
-    end
-
-    #tethers to plot?
-    if length(tether_x_coords)>0
-        #tether points
-        scatter!(ax, tether_x_coords, tether_y_coords;
-            marker = :xcross,
-            markersize = 10,
-            color = :red
-        )
-
-        #tethers
-        for ix = 1:length(tether_x_coords)
-            lines!(
-                [tether_x_coords[ix], tether_end_x_coords[ix]], [tether_y_coords[ix], tether_end_y_coords[ix]];
-                color = :black,
-                linestyle = (:dash, :dense),
-                linewidth = 1
-            )
-        end
-    end
-
-
-    #now plot a mask to cover everything outside the membrane
-    membrane_mask = Polygon(
-        Point2f[[0.0, 0.0], [max_dims[1], 0.0], max_dims, [0.0, max_dims[2]]],
-        [membrane_obj]
-    )
-    poly!(ax, membrane_mask;
-        color=:white
+    #plot agents
+    plot_agents!(ax, agents, dims, max_dims, params; 
+        centering=centering, 
+        demarcate_new_LPS_yn=demarcate_new_LPS_yn, 
+        show_tethers_yn=show_tethers_yn
     )
 
     #save figure
@@ -608,18 +616,27 @@ end
 
 """
     make_snapshots(out_path::String, time_vals::Vector{Float64};
-    centering::Union{Tuple{String, Int}, Nothing}=nothing
+        centering::Union{Tuple{String, Int}, Nothing}=nothing,
+        max_dims::Union{SVector{2, Float64}, Nothing}=nothing,
+        demarcate_new_LPS_yn::Bool=false,
+        show_tethers_yn::Bool=true
     )
 Makes snapshots at multiple time values specified in `time_vals` and saves them to `out_path`.
 Lightweight wrapper around `make_snapshot`.
 """
 function make_snapshots(out_path::String, time_vals::Vector{Float64};
     centering::Union{Tuple{String, Int}, Nothing}=nothing,
-    max_dims::Union{SVector{2, Float64}, Nothing}=nothing
+    max_dims::Union{SVector{2, Float64}, Nothing}=nothing,
+    demarcate_new_LPS_yn::Bool=false,
+    show_tethers_yn::Bool=true
     )
 
     for time_val in time_vals
-        make_snapshot(out_path, time_val; centering=centering, max_dims=max_dims)
+        make_snapshot(out_path, time_val; 
+            centering=centering, 
+            max_dims=max_dims, 
+            demarcate_new_LPS_yn=demarcate_new_LPS_yn, 
+            show_tethers_yn=show_tethers_yn)
     end
 
 end
@@ -634,7 +651,9 @@ makes snapshots for each system at each time value. First determines the maximum
 dimensions across all systems to ensure consistent sizing.
 """
 function make_snapshots_across_sweep(list_of_out_paths::Vector{String}, time_vals::Vector{Float64};
-    centering::Union{Tuple{String, Int}, Nothing}=nothing
+        centering::Union{Tuple{String, Int}, Nothing}=nothing,
+        demarcate_new_LPS_yn::Bool=false,
+        show_tethers_yn::Bool=true
     )
 
     #first work out the maximum dimensions across all systems
@@ -657,7 +676,14 @@ function make_snapshots_across_sweep(list_of_out_paths::Vector{String}, time_val
 
     #now make snapshots for each system at each time value
     for out_path in list_of_out_paths
-        make_snapshots(out_path, time_vals; centering=centering, max_dims=max_dims)
+        make_snapshots(out_path, time_vals; 
+            centering=centering, 
+            max_dims=max_dims, 
+            demarcate_new_LPS_yn=demarcate_new_LPS_yn, 
+            show_tethers_yn=show_tethers_yn
+        )
     end
 
 end
+
+
