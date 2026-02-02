@@ -759,6 +759,15 @@ function initialise_system_from_checkpoint(params::AllParams; suppress_prints::B
 
     #set grid dimensions
     grid_size.dims = dims
+    grid_size.num_agents = (
+        length(agents.OMP.OmpA) + 
+        length(agents.OMP.OmpCF) + 
+        length(agents.OMP.LptD) + 
+        length(agents.OMP.BamA) + 
+        length(agents.LPS) + 
+        length(agents.nascent.nascent_OMP) + 
+        length(agents.nascent.nascent_LPS)
+    )
 
     #populate data structures
     rebuild_grid!(grid_size, grid, agents, params.force.sensing_radius)
