@@ -25,7 +25,7 @@ function build_sim_dict(sweep_config::SweepParams)
             @assert haskey(checkpoint_config.sweep_params, param_key) "Sweep parameters do not match checkpoint sweep"
             @assert length(param_vals.values) == length(checkpoint_config.sweep_params[param_key].values) "Sweep parameter values do not match checkpoint sweep"
             for (i, val) in enumerate(param_vals.values)
-                if typeof(val)<:Float
+                if typeof(val)==Float64 || typeof(val)==Float32
                     @assert isapprox(val, checkpoint_config.sweep_params[param_key].values[i]) "Sweep parameter values do not match checkpoint sweep"
                 else
                     @assert val == checkpoint_config.sweep_params[param_key].values[i] "Sweep parameter values do not match checkpoint sweep"
