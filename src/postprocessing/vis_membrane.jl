@@ -298,7 +298,8 @@ end
     plot_agents!(ax::Axis, agents::AllAgents, dims::SVector{2, Float64}, 
                  max_dims::SVector{2, Float64}, params::AllParams;
                  centre_on_agent::Union{Tuple{String, Int}, Nothing}=nothing,
-                 centre_agent_at_point::Union{Vector{Float64}, SVector{2, Float64}}=[0.5, 0.5],
+                 centre_on_agents::Union{Vector{Tuple{String, Int}}, Nothing}=nothing,
+                 centre_at_point::Union{Vector{Float64}, SVector{2, Float64}}=[0.5, 0.5],
                  show_tethers_yn::Bool=true, demarcate_new_LPS_yn::Bool=false)
 
 Plots all membrane agents to axis `ax`.
@@ -306,7 +307,8 @@ Plots all membrane agents to axis `ax`.
 function plot_agents!(ax::Axis, agents::AllAgents, dims::SVector{2, Float64}, 
     max_dims::SVector{2, Float64}, params::AllParams;
     centre_on_agent::Union{Tuple{String, Int}, Nothing}=nothing,
-    centre_agent_at_point::Union{Vector{Float64}, SVector{2, Float64}}=[0.5, 0.5],
+    centre_on_agents::Union{Vector{Tuple{String, Int}}, Nothing}=nothing,
+    centre_at_point::Union{Vector{Float64}, SVector{2, Float64}}=[0.5, 0.5],
     show_tethers_yn::Bool=true, demarcate_new_LPS_yn::Bool=false)
 
     function _find_agent_position(agent_spec::Tuple{String, Int})
@@ -330,13 +332,28 @@ function plot_agents!(ax::Axis, agents::AllAgents, dims::SVector{2, Float64},
         centre_agent_position = _find_agent_position(centre_on_agent)
 
         #determine shift vector
-        shift_vec = centre_agent_at_point .* dims - centre_agent_position
+        shift_vec = centre_at_point .* dims - centre_agent_position
         shift_vec = SVector{2, Float64}(shift_vec)
 
         #centre all agents
         translate_all_agents!(agents, shift_vec, dims)
     end
     
+    #optionally centre everything around multiple agents (centroid)
+    if !isnothing(centre_on_agents)
+        
+        # Calculate the centroid of the specified agents
+        positions = [_find_agent_position(agent_spec) for agent_spec in centre_on_agents]
+        centroid = get_centroid(positions, dims)
+
+        # Determine shift vector
+        shift_vec = centre_at_point .* dims - centroid
+        shift_vec = SVector{2, Float64}(shift_vec)
+
+        # Centre all agents
+        translate_all_agents!(agents, shift_vec, dims)
+    end
+
     #get agent representations for this time step
     (
         membrane_obj, 
@@ -430,7 +447,8 @@ end
         plot_size::Int=500,
         fps::Int=24, 
         centre_on_agent::Union{Tuple{String, Int}, Nothing}=nothing,
-        centre_agent_at_point::Union{Vector{Float64}, SVector{2, Float64}}=[0.5, 0.5],
+        centre_on_agents::Union{Vector{Tuple{String, Int}}, Nothing}=nothing,
+        centre_at_point::Union{Vector{Float64}, SVector{2, Float64}}=[0.5, 0.5],
         demarcate_new_LPS_yn::Bool=false,
         output_extension::String=".mp4",
         show_tethers_yn::Bool=true
@@ -450,7 +468,8 @@ function make_membrane_movie(out_path::String;
     plot_size::Int=500,
     fps::Int=24, 
     centre_on_agent::Union{Tuple{String, Int}, Nothing}=nothing,
-    centre_agent_at_point::Union{Vector{Float64}, SVector{2, Float64}}=[0.5, 0.5],
+    centre_on_agents::Union{Vector{Tuple{String, Int}}, Nothing}=nothing,
+    centre_at_point::Union{Vector{Float64}, SVector{2, Float64}}=[0.5, 0.5],
     demarcate_new_LPS_yn::Bool=false,
     output_extension::String=".mp4",
     show_tethers_yn::Bool=true
@@ -536,8 +555,9 @@ function make_membrane_movie(out_path::String;
 
         #plot agents
         plot_agents!(ax, agents, dims, max_dims, params; 
+            centre_on_agents=centre_on_agents,
             centre_on_agent=centre_on_agent,
-            centre_agent_at_point=centre_agent_at_point,
+            centre_at_point=centre_at_point,
             demarcate_new_LPS_yn=demarcate_new_LPS_yn, 
             show_tethers_yn=show_tethers_yn
         )
@@ -561,7 +581,8 @@ end
 """
     make_snapshot(out_path::String, time_val::Float64; 
         centre_on_agent::Union{Tuple{String, Int}, Nothing}=nothing,
-        centre_agent_at_point::Union{Vector{Float64}, SVector{2, Float64}}=[0.5, 0.5],
+        centre_on_agents::Union{Vector{Tuple{String, Int}}, Nothing}=nothing,
+        centre_at_point::Union{Vector{Float64}, SVector{2, Float64}}=[0.5, 0.5],
         max_dims::Union{SVector{2, Float64}, Nothing}=nothing,
         demarcate_new_LPS_yn::Bool=false,
         show_tethers_yn::Bool=true
@@ -572,7 +593,8 @@ of the simulation data in `out_path/raw_data` at time value `time_val`.
 """
 function make_snapshot(out_path::String, time_val::Float64;
             centre_on_agent::Union{Tuple{String, Int}, Nothing}=nothing,
-            centre_agent_at_point::Union{Vector{Float64}, SVector{2, Float64}}=[0.5, 0.5],
+            centre_on_agents::Union{Vector{Tuple{String, Int}}, Nothing}=nothing,
+            centre_at_point::Union{Vector{Float64}, SVector{2, Float64}}=[0.5, 0.5],
             max_dims::Union{SVector{2, Float64}, Nothing}=nothing,
             demarcate_new_LPS_yn::Bool=false,
             show_tethers_yn::Bool=true
@@ -620,8 +642,9 @@ function make_snapshot(out_path::String, time_val::Float64;
 
     #plot agents
     plot_agents!(ax, agents, dims, max_dims, params; 
-        centre_on_agent=centre_on_agent, 
-        centre_agent_at_point=centre_agent_at_point,
+        centre_on_agent=centre_on_agent,
+        centre_on_agents=centre_on_agents,
+        centre_at_point=centre_at_point,
         demarcate_new_LPS_yn=demarcate_new_LPS_yn, 
         show_tethers_yn=show_tethers_yn
     )
@@ -646,7 +669,8 @@ end
 """
     make_snapshots(out_path::String, time_vals::Vector{Float64};
         centre_on_agent::Union{Tuple{String, Int}, Nothing}=nothing,
-        centre_agent_at_point::Union{Vector{Float64}, SVector{2, Float64}}=[0.5, 0.5],
+        centre_on_agents::Union{Vector{Tuple{String, Int}}, Nothing}=nothing,
+        centre_at_point::Union{Vector{Float64}, SVector{2, Float64}}=[0.5, 0.5],
         max_dims::Union{SVector{2, Float64}, Nothing}=nothing,
         demarcate_new_LPS_yn::Bool=false,
         show_tethers_yn::Bool=true
@@ -656,7 +680,8 @@ Lightweight wrapper around `make_snapshot`.
 """
 function make_snapshots(out_path::String, time_vals::Vector{Float64};
     centre_on_agent::Union{Tuple{String, Int}, Nothing}=nothing,
-    centre_agent_at_point::Union{Vector{Float64}, SVector{2, Float64}}=[0.5, 0.5],
+    centre_on_agents::Union{Vector{Tuple{String, Int}}, Nothing}=nothing,
+    centre_at_point::Union{Vector{Float64}, SVector{2, Float64}}=[0.5, 0.5],
     max_dims::Union{SVector{2, Float64}, Nothing}=nothing,
     demarcate_new_LPS_yn::Bool=false,
     show_tethers_yn::Bool=true
@@ -665,7 +690,8 @@ function make_snapshots(out_path::String, time_vals::Vector{Float64};
     for time_val in time_vals
         make_snapshot(out_path, time_val; 
             centre_on_agent=centre_on_agent, 
-            centre_agent_at_point=centre_agent_at_point,
+            centre_on_agents=centre_on_agents,
+            centre_at_point=centre_at_point,
             max_dims=max_dims, 
             demarcate_new_LPS_yn=demarcate_new_LPS_yn, 
             show_tethers_yn=show_tethers_yn)
@@ -677,7 +703,8 @@ end
 """
     get_snapshots_across_sweep(list_of_out_paths::Vector{String}, time_vals::Vector{Float64};
         centre_on_agent::Union{Tuple{String, Int}, Nothing}=nothing,
-        centre_agent_at_point::Union{Vector{Float64}, SVector{2, Float64}}=[0.5, 0.5],
+        centre_on_agents::Union{Vector{Tuple{String, Int}}, Nothing}=nothing,
+        centre_at_point::Union{Vector{Float64}, SVector{2, Float64}}=[0.5, 0.5],
         demarcate_new_LPS_yn::Bool=false,
         show_tethers_yn::Bool=true
     )
@@ -687,7 +714,8 @@ dimensions across all systems to ensure consistent sizing.
 """
 function make_snapshots_across_sweep(list_of_out_paths::Vector{String}, time_vals::Vector{Float64};
         centre_on_agent::Union{Tuple{String, Int}, Nothing}=nothing,
-        centre_agent_at_point::Union{Vector{Float64}, SVector{2, Float64}}=[0.5, 0.5],
+        centre_on_agents::Union{Vector{Tuple{String, Int}}, Nothing}=nothing,
+        centre_at_point::Union{Vector{Float64}, SVector{2, Float64}}=[0.5, 0.5],
         demarcate_new_LPS_yn::Bool=false,
         show_tethers_yn::Bool=true
     )
@@ -714,10 +742,11 @@ function make_snapshots_across_sweep(list_of_out_paths::Vector{String}, time_val
     for out_path in list_of_out_paths
         make_snapshots(out_path, time_vals; 
             centre_on_agent=centre_on_agent,
-            centre_agent_at_point=centre_agent_at_point,
+            centre_on_agents=centre_on_agents,
+            centre_at_point=centre_at_point,
             max_dims=max_dims, 
             demarcate_new_LPS_yn=demarcate_new_LPS_yn, 
-            show_tethers_yn=show_tethers_yn
+            show_tethers_yn=show_tethers_yn,
         )
     end
 

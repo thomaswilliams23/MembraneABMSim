@@ -224,3 +224,28 @@ Efficiently computes the floor of a Float32 value and returns it as Int32. GPU-s
     i -= (x < Float32(i))             # subtract 1 if x < i (emulates floor)
     return i
 end
+
+
+
+"""
+    get_centroid(positions::Vector{SVector{2, Float64}}, dims::SVector{2, Float64})
+
+Computes the centroid of a set of positions on a 2D periodic domain with dimensions `dims`.
+"""
+function get_centroid(positions::Vector{SVector{2, Float64}}, dims::SVector{2, Float64})
+
+    #set first agent as reference point
+    ref_pos = positions[1]
+
+    #catch trivial case of only one position
+    if length(positions) == 1
+        return ref_pos
+    #otherwise define all points by the shortest vector from the reference point, then take the mean and wrap back into the domain
+    else
+        vecs_from_ref = [shortest_vec(ref_pos, pos, dims) for pos in positions]
+        mean_vec_from_ref = mean(vecs_from_ref)
+        centroid = mod.(ref_pos + mean_vec_from_ref, dims)
+        return centroid
+    end
+
+end
