@@ -562,13 +562,43 @@ takes an agent beyond the tether radius of its tether point, the move is rejecte
 """
 function compute_diffusion!(agents::AllAgents, system_flat::AllAgentsFlat, grid_size::GridSize, params::AllParams)
 
-    #return early if diffusion temperature is too low
+    #return early if diffusion temperature is too low or diffusion is turned off
     temp_err = 1e-8
-    if params.force.temperature<temp_err
+    if params.force.temperature<temp_err || params.force.diffusion_mode=="off"
         return
     end
 
-    #precompute all diffusion coefficients and covariance matrices
+    #compute diffusion moves for each LPS (including nascent)
+    diff_coeff_LPS = params.force.temperature/params.LPS.radius
+    diff_cov_LPS = 2*diff_coeff_LPS*params.system.dt*Matrix(I, 2, 2)
+    LPS_displacement_dist = MvNormal(SVector{2, Float64}(0.0, 0.0), diff_cov_LPS)
+    for LPS in agents.LPS
+        displacement = rand(LPS_displacement_dist)
+        proposal_dest = mod.(LPS.position + displacement, grid_size.dims)
+        LPS.position = proposal_dest
+        #put in flat structure too
+        sorted_ix = system_flat.agent_ix_to_sorted_ix[LPS.index]
+        system_flat.positions[2*sorted_ix-1] = LPS.position[1]
+        system_flat.positions[2*sorted_ix] = LPS.position[2]
+        system_flat.agg_dist_since_grid_sync[sorted_ix] += norm(displacement)
+    end
+    for nascent_LPS in agents.nascent.nascent_LPS
+        displacement = rand(LPS_displacement_dist)
+        proposal_dest = mod.(nascent_LPS.position + displacement, grid_size.dims)
+        nascent_LPS.position = proposal_dest
+        #put in flat structure too
+        sorted_ix = system_flat.agent_ix_to_sorted_ix[nascent_LPS.index]
+        system_flat.positions[2*sorted_ix-1] = nascent_LPS.position[1]
+        system_flat.positions[2*sorted_ix] = nascent_LPS.position[2]
+        system_flat.agg_dist_since_grid_sync[sorted_ix] += norm(displacement)
+    end
+
+    #return early if diffusion mode is LPS only
+    if params.force.diffusion_mode=="LPS_only"
+        return
+    end
+
+    #compute diffusion moves for each OMP (including nascent) - reject proposals that exceed tether radius for tethered agents
     diff_coeff_OmpA = params.force.temperature/params.OmpA.radius
     diff_cov_OmpA = 2*diff_coeff_OmpA*params.system.dt*Matrix(I, 2, 2)
     OmpA_displacement_dist = MvNormal(SVector{2, Float64}(0.0, 0.0), diff_cov_OmpA)
@@ -585,11 +615,6 @@ function compute_diffusion!(agents::AllAgents, system_flat::AllAgentsFlat, grid_
     diff_cov_LptD = 2*diff_coeff_LptD*params.system.dt*Matrix(I, 2, 2)
     LptD_displacement_dist = MvNormal(SVector{2, Float64}(0.0, 0.0), diff_cov_LptD)
 
-    diff_coeff_LPS = params.force.temperature/params.LPS.radius
-    diff_cov_LPS = 2*diff_coeff_LPS*params.system.dt*Matrix(I, 2, 2)
-    LPS_displacement_dist = MvNormal(SVector{2, Float64}(0.0, 0.0), diff_cov_LPS)
-
-    #loop each agent type, generate a new position (reject if too far from tether)
     for OmpA in agents.OMP.OmpA
         displacement = rand(OmpA_displacement_dist)
         proposal_dest = mod.(OmpA.position + displacement, grid_size.dims)
@@ -640,16 +665,6 @@ function compute_diffusion!(agents::AllAgents, system_flat::AllAgentsFlat, grid_
         system_flat.positions[2*sorted_ix] = LptD.position[2]
         system_flat.agg_dist_since_grid_sync[sorted_ix] += norm(displacement)
     end
-    for LPS in agents.LPS
-        displacement = rand(LPS_displacement_dist)
-        proposal_dest = mod.(LPS.position + displacement, grid_size.dims)
-        LPS.position = proposal_dest
-        #put in flat structure too
-        sorted_ix = system_flat.agent_ix_to_sorted_ix[LPS.index]
-        system_flat.positions[2*sorted_ix-1] = LPS.position[1]
-        system_flat.positions[2*sorted_ix] = LPS.position[2]
-        system_flat.agg_dist_since_grid_sync[sorted_ix] += norm(displacement)
-    end
     for nascent_OMP in agents.nascent.nascent_OMP
         if nascent_OMP.OMP_type == "OmpA"
             displacement = rand(OmpA_displacement_dist)
@@ -667,15 +682,6 @@ function compute_diffusion!(agents::AllAgents, system_flat::AllAgentsFlat, grid_
         sorted_ix = system_flat.agent_ix_to_sorted_ix[nascent_OMP.index]
         system_flat.positions[2*sorted_ix-1] = nascent_OMP.position[1]
         system_flat.positions[2*sorted_ix] = nascent_OMP.position[2]
-        system_flat.agg_dist_since_grid_sync[sorted_ix] += norm(displacement)
-    end
-    for nascent_LPS in agents.nascent.nascent_LPS
-        displacement = rand(LPS_displacement_dist)
-        proposal_dest = mod.(nascent_LPS.position + displacement, grid_size.dims)
-        nascent_LPS.position = proposal_dest
-        sorted_ix = system_flat.agent_ix_to_sorted_ix[nascent_LPS.index]
-        system_flat.positions[2*sorted_ix-1] = nascent_LPS.position[1]
-        system_flat.positions[2*sorted_ix] = nascent_LPS.position[2]
         system_flat.agg_dist_since_grid_sync[sorted_ix] += norm(displacement)
     end
 end

@@ -122,6 +122,7 @@ struct ForceParams
     k_C::Float64
     eta::Float64
     sensing_radius::Float64
+    diffusion_mode::Union{Nothing, String}
 end
 
 """
