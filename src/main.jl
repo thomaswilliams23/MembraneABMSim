@@ -100,7 +100,7 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false, sup
     MAX_STEPS_BETWEEN_GRID_SYNC = 100 #temporary
     max_time_ix = round(Int, params.system.t_max/params.system.dt)
     output_ix_interval = round(Int, params.system.vis_dt/params.system.dt)
-    time_ix_offset = isnothing(params.init.checkpoint_time) ? 0 : round(Int, params.init.checkpoint_time/params.system.vis_dt)
+    time_ix_offset = isnothing(params.init.checkpoint_time) ? 0 : round(Int, params.init.checkpoint_time/params.system.dt)
     for time_ix in time_ix_offset:(max_time_ix+time_ix_offset)
 
         t = time_ix * params.system.dt
