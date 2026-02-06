@@ -88,6 +88,7 @@ struct InitConditions
     equilibration_time::Union{Nothing, Float64}
     complexes_assembled::Union{Nothing, Bool}
     checkpoint_file::Union{Nothing, String}
+    checkpoint_time::Union{Nothing, Float64}
 end
 
 """

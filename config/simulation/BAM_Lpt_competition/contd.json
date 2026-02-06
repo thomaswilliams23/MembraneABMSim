@@ -35,7 +35,8 @@
         "num_LPS": 200,
         "num_PP": 0,
         "method": "from_checkpoint",
-        "checkpoint_file": ""
+        "checkpoint_file": "",
+        "checkpoint_time": 600.0
     },
     "insertion": {
         "type": "lipid-dependent",
