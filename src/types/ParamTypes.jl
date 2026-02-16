@@ -88,6 +88,7 @@ struct InitConditions
     equilibration_time::Union{Nothing, Float64}
     complexes_assembled::Union{Nothing, Bool}
     checkpoint_file::Union{Nothing, String}
+    checkpoint_time::Union{Nothing, Float64}
 end
 
 """
@@ -122,6 +123,7 @@ struct ForceParams
     k_C::Float64
     eta::Float64
     sensing_radius::Float64
+    diffusion_mode::Union{Nothing, String}
 end
 
 """

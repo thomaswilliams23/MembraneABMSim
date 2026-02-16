@@ -71,7 +71,7 @@
     "system": {
         "density": 0.9,
         "dt": 0.0001,
-        "t_max": 600,
+        "t_max": 1000,
         "vis_dt": 1.0,
         "output_dir": "TEST_BAM_Lpt_competition",
         "seed": 1

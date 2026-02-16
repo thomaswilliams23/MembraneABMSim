@@ -90,17 +90,20 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false, sup
     end
 
 
+    #decide initial time - this might be offset if we are restarting from a checkpoint
+    time_ix_offset = isnothing(params.init.checkpoint_time) ? 0 : round(Int, params.init.checkpoint_time/params.system.dt)
+
     #write out initial state
-    output_ix = 0
-    write_system_state(agents, grid_size.dims, params.system.output_dir, output_ix)
+    output_ix_interval = round(Int, params.system.vis_dt/params.system.dt)
+    init_output_ix = round(Int, time_ix_offset/output_ix_interval)
+    write_system_state(agents, grid_size.dims, params.system.output_dir, init_output_ix)
 
 
     #main loop
     steps_since_grid_sync = 0
     MAX_STEPS_BETWEEN_GRID_SYNC = 100 #temporary
     max_time_ix = round(Int, params.system.t_max/params.system.dt)
-    output_ix_interval = round(Int, params.system.vis_dt/params.system.dt)
-    for time_ix in 0:max_time_ix
+    for time_ix in (1:max_time_ix) .+ time_ix_offset
 
         t = time_ix * params.system.dt
 
