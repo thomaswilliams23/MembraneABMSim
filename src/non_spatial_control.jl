@@ -119,3 +119,57 @@ function run_quick_non_spatial_sim(config_pathname::String; clear_existing_outpu
     return
 
 end
+
+
+
+"""
+    run_reps_quick_non_spatial_sim(config_pathname::String, nreps::Int)
+
+Wrapper around `run_quick_non_spatial_sim` for running multiple replicates of a non-spatial simulation based on a simulation config file. This is intended for running multiple replicates of the non-spatial control simulation.
+"""
+function run_reps_quick_non_spatial_sim(config_pathname::String, nreps::Int)
+    
+    #helper for running one of the simulations with a unique seed
+    function _run_quick_non_spatial_sim_rep(def_params::AllParams, sim_ix::Int)
+
+        #get sim info
+        sim_path = "rep$(sim_ix)"
+        sim_param_changes = Dict{String, Any}("system/seed" => sim_ix)
+        
+        #set up output directory for this sim
+        base_dir = "multi_run_" * def_params.system.output_dir
+        raw_out_path = joinpath(base_dir, sim_path)
+        actual_out_path = joinpath("NON_SPATIAL_" * base_dir, sim_path)
+        set_up_output_directory(actual_out_path; suppress_prints=true)
+
+        #make a config for each
+        params_this_sim = make_config_this_sim(def_params, sim_param_changes, raw_out_path)
+
+        #save a copy of the config
+        config_fname = joinpath("out", actual_out_path, "config.json")
+        open(config_fname, "w") do f
+            JSON3.pretty(f, JSON3.write(params_this_sim))
+        end
+
+        #run the sim
+        run_quick_non_spatial_sim(config_fname; suppress_prints=true)
+    end
+
+    #helper for printing progress
+    function _print_progress!(completed_sims::Vector{Int}, sim_ix::Int, num_sims::Int)
+        completed_sims[sim_ix] = 1
+        num_completed = sum(completed_sims)
+        print("Completed $num_completed of $num_sims simulations\r")
+    end
+
+    #load in the default parameters
+    def_params = parse_config(config_pathname)
+
+    #run all the simulations
+    completed_sims = zeros(Int, nreps)
+    Threads.@threads for sim_ix in eachindex(completed_sims)
+        _run_quick_non_spatial_sim_rep(def_params, sim_ix)
+        _print_progress!(completed_sims, sim_ix, nreps)
+    end
+
+end
