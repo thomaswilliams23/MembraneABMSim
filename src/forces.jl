@@ -598,6 +598,12 @@ function compute_diffusion!(agents::AllAgents, system_flat::AllAgentsFlat, grid_
         return
     end
 
+
+    # FEATURE NO LONGER SUPPORTED: diffusion coefficients should not be calculated using Stokes-Einstein for membrane Brownian motion
+    error("Diffusion of OMPs is no longer supported, since current implementation relies on Stokes-Einstein which is not appropriate for membrane Brownian motion.")
+    #
+
+
     #compute diffusion moves for each OMP (including nascent) - reject proposals that exceed tether radius for tethered agents
     diff_coeff_OmpA = params.force.temperature/params.OmpA.radius
     diff_cov_OmpA = 2*diff_coeff_OmpA*params.system.dt*Matrix(I, 2, 2)
