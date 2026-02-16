@@ -8,10 +8,9 @@ simulation according to the settings given in the config.
 """
 function run_sim(config_pathname::String; clear_existing_output::Bool=false, suppress_prints::Bool=false)
 
-    #parse the config and add a copy to the output directory
+    #parse the config and check it
     params = parse_config(config_pathname)
     check_params(params)
-    copy_config_to_output_dir(config_pathname, params.system.output_dir)
 
     #if specified, set the random seed
     if !isnothing(params.system.seed)
@@ -51,7 +50,7 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false, sup
     effective_rad_incs, ideal_dist_incs = compute_nascent_incs(params)
 
 
-    #intialise the system
+    #intialise the system (device-specific)
     if device=="cpu"
         (
             agents, 
@@ -88,6 +87,9 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false, sup
         effective_rad_incs_CUDA = Float32.(effective_rad_incs)
         ideal_dist_incs_CUDA = Float32.(ideal_dist_incs)
     end
+
+    #add a copy of the config to the output directory
+    copy_config_to_output_dir(config_pathname, params.system.output_dir)
 
 
     #decide initial time - this might be offset if we are restarting from a checkpoint
