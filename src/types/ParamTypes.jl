@@ -137,6 +137,7 @@ struct SystemParams
     t_max::Float64
     vis_dt::Float64
     output_dir::String
+    max_hole_radius::Union{Nothing, Float64}
     seed::Union{Nothing, Int}
     device::Union{Nothing, String}
 end
