@@ -100,6 +100,10 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false, sup
     init_output_ix = round(Int, time_ix_offset/output_ix_interval)
     write_system_state(agents, grid_size.dims, params.system.output_dir, init_output_ix)
 
+    #only permit the membrane to grow if no holes are present
+    #we check for holes at every grid sync
+    allow_membrane_growth = true
+
 
     #main loop
     steps_since_grid_sync = 0
@@ -118,7 +122,7 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false, sup
         #if we added new agents, need to update grid and flat data structure
         if grid_size.num_agents_changed
 
-            #if using metal, copy data back to CPU to rebuild grid
+            #if using a GPU, copy data back to CPU to rebuild grid
             if device=="metal"
                 copy_data_to_cpu_from_metal!(system_flat_cpu, agents, all_data_metal, grid_size_metal)
             elseif device=="cuda"
@@ -130,15 +134,23 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false, sup
             compile_flat_system_data_cpu!(system_flat_cpu, agents, grid_size, grid, params)
             put_grid_in_sorted_order!(grid_size, grid, system_flat_cpu)
 
-            #if using metal, copy data to GPU
+            #if using a GPU, copy data to GPU
             if device=="metal"
                 copy_data_to_metal!(all_data_metal, grid_size_metal, system_flat_cpu, grid_size, grid)
             elseif device=="cuda"
                 copy_data_to_CUDA!(all_data_CUDA, grid_size_CUDA, system_flat_cpu, grid_size, grid)
             end
 
-            steps_since_grid_sync = 0
             grid_size.num_agents_changed = false
+
+            #check for membrane holes (if a max hole radius is specified) and block growth if so
+            if membrane_contains_hole(agents, grid_size, params)
+                allow_membrane_growth = false
+            else
+                allow_membrane_growth = true
+            end
+
+            steps_since_grid_sync = 0
         end
 
         #if any nascent agents have been promoted, need to update flat data structure and pass to gpu
@@ -170,9 +182,11 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false, sup
         #update any nascent agents
         update_nascent_agents!(agents, system_flat_cpu, effective_rad_incs, ideal_dist_incs)
 
-        #rescale the domain and all agent positions
+        #adjust membrane area if allowed - note that GPU kernels need to be called regardless, as they also update nascent agents and tethering states
         if device=="cpu"
-            rescale_domain!(agents, system_flat_cpu, grid_size, params, nascent_added_area_lookup, t)
+            if allow_membrane_growth
+                rescale_domain!(agents, system_flat_cpu, grid_size, params, nascent_added_area_lookup, t)
+            end
         elseif device=="metal"
             compute_non_force_position_changes_metal!(
                 non_force_position_kernel, 
@@ -185,7 +199,8 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false, sup
                 nascent_added_area_lookup, 
                 newly_tethered_agent_ixs, 
                 params, 
-                t
+                t,
+                allow_membrane_growth=allow_membrane_growth
             )
         elseif device=="cuda"
             compute_non_force_position_changes_CUDA!(
@@ -199,7 +214,8 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false, sup
                 nascent_added_area_lookup, 
                 newly_tethered_agent_ixs, 
                 params, 
-                t
+                t,
+                allow_membrane_growth=allow_membrane_growth
             )
         end
 
@@ -224,6 +240,13 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false, sup
                 copy_data_to_metal!(all_data_metal, grid_size_metal, system_flat_cpu, grid_size, grid)
             elseif device=="cuda"
                 copy_data_to_CUDA!(all_data_CUDA, grid_size_CUDA, system_flat_cpu, grid_size, grid)
+            end
+
+            #check for membrane holes (if a max hole radius is specified) and block growth if so
+            if membrane_contains_hole(agents, grid_size, params)
+                allow_membrane_growth = false
+            else
+                allow_membrane_growth = true
             end
 
             steps_since_grid_sync = 0

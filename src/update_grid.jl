@@ -101,7 +101,7 @@ function rescale_domain!(agents::AllAgents, system_flat::AllAgentsFlat, grid_siz
     added_area_this_timestep = compute_added_area(agents, params, nascent_added_area_lookup, t)
 
     #return early if no area added
-    added_area_err = 1e-10
+    added_area_err = 1e-20
     if added_area_this_timestep<added_area_err
         return
     end
@@ -224,6 +224,12 @@ Determines whether the membrane contains a hole which can fit a circle of radius
 """
 function membrane_contains_hole(agents::AllAgents, grid_size::GridSize, params::AllParams)
 
+    #if the parameters specify no hole radius, return false immediately
+    if isnothing(params.system.max_hole_radius)
+        return false
+    end
+
+    #otherwise, continue
     PIXEL_GRID_WIDTH = params.system.max_hole_radius / 3.0 #temporary - need fine enough resolution to keep approximation error low, but not so fine that it becomes computationally expensive
     
     @inline function _mark_occupied_pixels!(occupied_grid::BitMatrix, agent_centre::SVector{2, Float64}, agent_radius::Float64, pixel_range::SVector{2, Int}, act_pixel_widths::SVector{2, Float64}, dims::SVector{2, Float64})
