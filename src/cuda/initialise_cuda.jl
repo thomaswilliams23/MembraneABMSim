@@ -39,13 +39,13 @@ end
 
 """
     run_equilibration_CUDA!(agents::AllAgents, grid_size::GridSize, grid::SimGrid, system_flat_cpu::AllAgentsFlat, 
-        all_data_CUDA::AllDataCUDA, grid_size_CUDA::GridSizeCUDA, force_kernel, params::AllParams, params_CUDA::AllParamsCUDA, 
+        all_data_CUDA::AllDataCUDA, grid_size_CUDA::GridSizeCUDA, force_kernel, params::AllParams, params_CUDA::ParamsCUDA, 
         equilibration_time::Float64; suppress_prints::Bool=false)
 
 Runs equilibration for a specified time using the CUDA GPU backend. Synchronises data between CPU and GPU as needed to update the grid and resolve forces.
 """
 function run_equilibration_CUDA!(agents::AllAgents, grid_size::GridSize, grid::SimGrid, system_flat_cpu::AllAgentsFlat, 
-    all_data_CUDA::AllDataCUDA, grid_size_CUDA::GridSizeCUDA, force_kernel, params::AllParams, params_CUDA::AllParamsCUDA, 
+    all_data_CUDA::AllDataCUDA, grid_size_CUDA::GridSizeCUDA, force_kernel, params::AllParams, params_CUDA::ParamsCUDA, 
     equilibration_time::Float64; suppress_prints::Bool=false)
 
     #run equilibration
@@ -104,14 +104,14 @@ end
 
 """
     run_membrane_shrinkage_CUDA!(agents::AllAgents, grid_size::GridSize, grid::SimGrid, system_flat_cpu::AllAgentsFlat, 
-        all_data_CUDA::AllDataCUDA, grid_size_CUDA::GridSizeCUDA, force_kernel, params::AllParams, params_CUDA::AllParamsCUDA; 
+        all_data_CUDA::AllDataCUDA, grid_size_CUDA::GridSizeCUDA, force_kernel, params::AllParams, params_CUDA::ParamsCUDA; 
         suppress_prints::Bool=false)
 
 Runs an iterative membrane shrinkage procedure to remove holes in the initial configuration. Shrinks the domain iteratively, equilibrating at each step, until holes are removed 
 or a maximum number of shrinkage rounds is reached.
 """
 function run_membrane_shrinkage_CUDA!(agents::AllAgents, grid_size::GridSize, grid::SimGrid, system_flat_cpu::AllAgentsFlat, 
-    all_data_CUDA::AllDataCUDA, grid_size_CUDA::GridSizeCUDA, force_kernel, params::AllParams, params_CUDA::AllParamsCUDA; 
+    all_data_CUDA::AllDataCUDA, grid_size_CUDA::GridSizeCUDA, force_kernel, params::AllParams, params_CUDA::ParamsCUDA; 
     suppress_prints::Bool=false)
 
     @assert !isnothing(params.system.max_hole_radius) "max_hole_radius must be specified in params.system to run membrane shrinkage."
