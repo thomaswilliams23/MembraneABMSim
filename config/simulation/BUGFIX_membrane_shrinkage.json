@@ -79,7 +79,7 @@
         "radius": 0.0518
     },
     "system": {
-        "t_max": 0.0,
+        "t_max": 500.0,
         "density": 0.9,
         "vis_dt": 1,
         "device": null,
