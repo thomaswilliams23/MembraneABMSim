@@ -38,11 +38,15 @@ end
 
 
 """
-    run_equilibration_CUDA!(agents::AllAgents, grid_size::GridSize, grid::SimGrid, system_flat_cpu::AllAgentsFlat, all_data_CUDA::AllDataCUDA, grid_size_CUDA::GridSizeCUDA, force_kernel, params::AllParams, equilibration_time::Float64; suppress_prints::Bool=false)
+    run_equilibration_CUDA!(agents::AllAgents, grid_size::GridSize, grid::SimGrid, system_flat_cpu::AllAgentsFlat, 
+        all_data_CUDA::AllDataCUDA, grid_size_CUDA::GridSizeCUDA, force_kernel, params::AllParams, params_CUDA::AllParamsCUDA, 
+        equilibration_time::Float64; suppress_prints::Bool=false)
 
 Runs equilibration for a specified time using the CUDA GPU backend. Synchronises data between CPU and GPU as needed to update the grid and resolve forces.
 """
-function run_equilibration_CUDA!(agents::AllAgents, grid_size::GridSize, grid::SimGrid, system_flat_cpu::AllAgentsFlat, all_data_CUDA::AllDataCUDA, grid_size_CUDA::GridSizeCUDA, force_kernel, params::AllParams, equilibration_time::Float64; suppress_prints::Bool=false)
+function run_equilibration_CUDA!(agents::AllAgents, grid_size::GridSize, grid::SimGrid, system_flat_cpu::AllAgentsFlat, 
+    all_data_CUDA::AllDataCUDA, grid_size_CUDA::GridSizeCUDA, force_kernel, params::AllParams, params_CUDA::AllParamsCUDA, 
+    equilibration_time::Float64; suppress_prints::Bool=false)
 
     #run equilibration
     steps_since_grid_sync = 0
@@ -99,12 +103,16 @@ end
 
 
 """
-    run_membrane_shrinkage_CUDA!(agents::AllAgents, grid_size::GridSize, grid::SimGrid, system_flat_cpu::AllAgentsFlat, all_data_CUDA::AllDataCUDA, grid_size_CUDA::GridSizeCUDA, force_kernel, params::AllParams; suppress_prints::Bool=false)
+    run_membrane_shrinkage_CUDA!(agents::AllAgents, grid_size::GridSize, grid::SimGrid, system_flat_cpu::AllAgentsFlat, 
+        all_data_CUDA::AllDataCUDA, grid_size_CUDA::GridSizeCUDA, force_kernel, params::AllParams, params_CUDA::AllParamsCUDA; 
+        suppress_prints::Bool=false)
 
 Runs an iterative membrane shrinkage procedure to remove holes in the initial configuration. Shrinks the domain iteratively, equilibrating at each step, until holes are removed 
 or a maximum number of shrinkage rounds is reached.
 """
-function run_membrane_shrinkage_CUDA!(agents::AllAgents, grid_size::GridSize, grid::SimGrid, system_flat_cpu::AllAgentsFlat, all_data_CUDA::AllDataCUDA, grid_size_CUDA::GridSizeCUDA, force_kernel, params::AllParams; suppress_prints::Bool=false)
+function run_membrane_shrinkage_CUDA!(agents::AllAgents, grid_size::GridSize, grid::SimGrid, system_flat_cpu::AllAgentsFlat, 
+    all_data_CUDA::AllDataCUDA, grid_size_CUDA::GridSizeCUDA, force_kernel, params::AllParams, params_CUDA::AllParamsCUDA; 
+    suppress_prints::Bool=false)
 
     @assert !isnothing(params.system.max_hole_radius) "max_hole_radius must be specified in params.system to run membrane shrinkage."
 
@@ -150,7 +158,7 @@ function run_membrane_shrinkage_CUDA!(agents::AllAgents, grid_size::GridSize, gr
             copy_data_to_CUDA!(all_data_CUDA, grid_size_CUDA, system_flat_cpu, grid_size, grid) #<- this copies the updated positions and dimensions to the GPU for equilibration
 
             #equilibrate again
-            run_equilibration_CUDA!(agents, grid_size, grid, system_flat_cpu, all_data_CUDA, grid_size_CUDA, force_kernel, params, shrinkage_equilibration_time; suppress_prints=true)
+            run_equilibration_CUDA!(agents, grid_size, grid, system_flat_cpu, all_data_CUDA, grid_size_CUDA, force_kernel, params, params_CUDA, shrinkage_equilibration_time; suppress_prints=true)
 
             shrinkage_round_num += 1
             membrane_contains_hole_yn = membrane_contains_hole(agents, grid_size, params)
@@ -198,12 +206,12 @@ function initialise_system_random_CUDA(force_kernel, params::AllParams; suppress
 
     #run equilibration
     if params.init.equilibration_time > 0.0
-        run_equilibration_CUDA!(agents, grid_size, grid, system_flat_cpu, all_data_CUDA, grid_size_CUDA, force_kernel, params, params.init.equilibration_time; suppress_prints=suppress_prints)
+        run_equilibration_CUDA!(agents, grid_size, grid, system_flat_cpu, all_data_CUDA, grid_size_CUDA, force_kernel, params, params_CUDA, params.init.equilibration_time; suppress_prints=suppress_prints)
     end
 
     #optionally, shrink the domain to fit the agents after equilibration
     if params.init.shrink_to_size == true
-        run_membrane_shrinkage_CUDA!(agents, grid_size, grid, system_flat_cpu, all_data_CUDA, grid_size_CUDA, force_kernel, params; suppress_prints=suppress_prints)
+        run_membrane_shrinkage_CUDA!(agents, grid_size, grid, system_flat_cpu, all_data_CUDA, grid_size_CUDA, force_kernel, params, params_CUDA; suppress_prints=suppress_prints)
     end
 
     #if specified, set all agents as assembled/tethered

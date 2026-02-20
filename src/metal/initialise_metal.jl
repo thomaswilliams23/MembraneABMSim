@@ -40,11 +40,15 @@ end
 
 
 """
-    run_equilibration_metal!(agents::AllAgents, grid_size::GridSize, grid::SimGrid, system_flat_cpu::AllAgentsFlat, all_data_metal::AllDataMetal, grid_size_metal::GridSizeMetal, force_kernel, params::AllParams, equilibration_time::Float64; suppress_prints::Bool=false)
+    run_equilibration_metal!(agents::AllAgents, grid_size::GridSize, grid::SimGrid, system_flat_cpu::AllAgentsFlat, 
+        all_data_metal::AllDataMetal, grid_size_metal::GridSizeMetal, force_kernel, params::AllParams, params_metal::AllParamsMetal, 
+        equilibration_time::Float64; suppress_prints::Bool=false)
 
 Runs equilibration for a specified time using the Metal GPU backend. Synchronises data between CPU and GPU as needed to update the grid and resolve forces.
 """
-function run_equilibration_metal!(agents::AllAgents, grid_size::GridSize, grid::SimGrid, system_flat_cpu::AllAgentsFlat, all_data_metal::AllDataMetal, grid_size_metal::GridSizeMetal, force_kernel, params::AllParams, equilibration_time::Float64; suppress_prints::Bool=false)
+function run_equilibration_metal!(agents::AllAgents, grid_size::GridSize, grid::SimGrid, system_flat_cpu::AllAgentsFlat, 
+    all_data_metal::AllDataMetal, grid_size_metal::GridSizeMetal, force_kernel, params::AllParams, params_metal::AllParamsMetal, 
+    equilibration_time::Float64; suppress_prints::Bool=false)
 
     #run equilibration
     steps_since_grid_sync = 0
@@ -101,12 +105,12 @@ end
 
 
 """
-    run_membrane_shrinkage_metal!(agents::AllAgents, grid_size::GridSize, grid::SimGrid, system_flat_cpu::AllAgentsFlat, all_data_metal::AllDataMetal, grid_size_metal::GridSizeMetal, force_kernel, params::AllParams; suppress_prints::Bool=false)
+    run_membrane_shrinkage_metal!(agents::AllAgents, grid_size::GridSize, grid::SimGrid, system_flat_cpu::AllAgentsFlat, all_data_metal::AllDataMetal, grid_size_metal::GridSizeMetal, force_kernel, params::AllParams, params_metal::AllParamsMetal; suppress_prints::Bool=false)
 
 Runs an iterative membrane shrinkage procedure to remove holes in the initial configuration. Shrinks the domain iteratively, equilibrating at each step, until holes are removed 
 or a maximum number of shrinkage rounds is reached.
 """
-function run_membrane_shrinkage_metal!(agents::AllAgents, grid_size::GridSize, grid::SimGrid, system_flat_cpu::AllAgentsFlat, all_data_metal::AllDataMetal, grid_size_metal::GridSizeMetal, force_kernel, params::AllParams; suppress_prints::Bool=false)
+function run_membrane_shrinkage_metal!(agents::AllAgents, grid_size::GridSize, grid::SimGrid, system_flat_cpu::AllAgentsFlat, all_data_metal::AllDataMetal, grid_size_metal::GridSizeMetal, force_kernel, params::AllParams, params_metal::AllParamsMetal; suppress_prints::Bool=false)
 
     @assert !isnothing(params.system.max_hole_radius) "max_hole_radius must be specified in params.system to run membrane shrinkage."
 
@@ -152,7 +156,7 @@ function run_membrane_shrinkage_metal!(agents::AllAgents, grid_size::GridSize, g
             copy_data_to_metal!(all_data_metal, grid_size_metal, system_flat_cpu, grid_size, grid) #<- this copies the updated positions and dimensions to the GPU for equilibration
 
             #equilibrate again
-            run_equilibration_metal!(agents, grid_size, grid, system_flat_cpu, all_data_metal, grid_size_metal, force_kernel, params, shrinkage_equilibration_time; suppress_prints=true)
+            run_equilibration_metal!(agents, grid_size, grid, system_flat_cpu, all_data_metal, grid_size_metal, force_kernel, params, params_metal, shrinkage_equilibration_time; suppress_prints=true)
 
             shrinkage_round_num += 1
             membrane_contains_hole_yn = membrane_contains_hole(agents, grid_size, params)
@@ -199,12 +203,12 @@ function initialise_system_random_metal(force_kernel, params::AllParams; suppres
 
     #run equilibration
     if params.init.equilibration_time > 0.0
-        run_equilibration_metal!(agents, grid_size, grid, system_flat_cpu, all_data_metal, grid_size_metal, force_kernel, params, params.init.equilibration_time; suppress_prints=suppress_prints)
+        run_equilibration_metal!(agents, grid_size, grid, system_flat_cpu, all_data_metal, grid_size_metal, force_kernel, params, params_metal, params.init.equilibration_time; suppress_prints=suppress_prints)
     end
 
     #optionally, shrink the domain to fit the agents after equilibration
     if params.init.shrink_to_size == true
-        run_membrane_shrinkage_metal!(agents, grid_size, grid, system_flat_cpu, all_data_metal, grid_size_metal, force_kernel, params; suppress_prints=suppress_prints)
+        run_membrane_shrinkage_metal!(agents, grid_size, grid, system_flat_cpu, all_data_metal, grid_size_metal, force_kernel, params, params_metal; suppress_prints=suppress_prints)
     end
 
     #if specified, set all agents as assembled/tethered
