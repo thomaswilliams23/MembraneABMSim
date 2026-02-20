@@ -1,0 +1,91 @@
+{
+    "LptD": {
+        "complex_assembly_rate": 0.1,
+        "tether_radius": 10,
+        "insertion_prob": 0,
+        "radius": 0.259
+    },
+    "BamA": {
+        "complex_assembly_rate": 0.3,
+        "insertion_prob": 0,
+        "radius": 0.1725
+    },
+    "insertion": {
+        "mu_rep": 0.5,
+        "mu_attr": 0.5,
+        "PP_arrival_rate": 0.5,
+        "OMP_assembly_rate": 0.025,
+        "attempt_dt": 0.1,
+        "PP_bind_rate": 0.05,
+        "type": "lipid-dependent",
+        "k_C": 0.5
+    },
+    "init": {
+        "dim_x": 1.08,
+        "complexes_assembled": true,
+        "method": "specify_positions",
+        "equilibration_time": 10,
+        "positions": {
+            "LptD": [
+                [
+                    0,
+                    0
+                ]
+            ],
+            "BamA": [
+                [
+                    0.504,
+                    0.504
+                ]
+            ],
+            "OmpCF": null,
+            "LPS": null,
+            "OmpA": null
+        },
+        "num_OmpA": 0,
+        "num_PP": 0,
+        "dim_y": 1.08,
+        "num_LptD": 1,
+        "num_LPS": 200,
+        "num_OmpCF": 0,
+        "num_BamA": 1,
+        "shrink_to_size": true
+    },
+    "OmpCF": {
+        "insertion_prob": 0,
+        "radius": 0.1725
+    },
+    "force": {
+        "mu_rep": 0.05,
+        "mu_attr_OMP_OMP": 0.1,
+        "mu_attr_OMP_LPS": 0.1,
+        "rho": 0.9,
+        "k_C": 0.5,
+        "max_repulsion": -0.2,
+        "sensing_radius": 0.1,
+        "eta": 1,
+        "temperature": 0,
+        "mu_attr_LPS_LPS": 0.5
+    },
+    "LPS": {
+        "insertion_time": 1,
+        "arrival_rate": 0.5,
+        "radius": 0.0345
+    },
+    "OmpA": {
+        "tether_rate": 0,
+        "tether_radius": 0.025,
+        "insertion_prob": 1,
+        "radius": 0.0518
+    },
+    "system": {
+        "t_max": 0.0,
+        "density": 0.9,
+        "vis_dt": 1,
+        "device": null,
+        "dt": 0.0001,
+        "output_dir": "BUGFIX_membrane_shrinkage",
+        "seed": 27,
+        "max_hole_radius": 0.05
+    }
+}

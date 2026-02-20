@@ -89,6 +89,10 @@ struct InitConditions
     complexes_assembled::Union{Nothing, Bool}
     checkpoint_file::Union{Nothing, String}
     checkpoint_time::Union{Nothing, Float64}
+    shrink_to_size::Union{Nothing, Bool}
+    shrinkage_factor::Union{Nothing, Float64}
+    max_num_shrinkage_rounds::Union{Nothing, Int}
+    shrinkage_equilibration_time::Union{Nothing, Float64}
 end
 
 """

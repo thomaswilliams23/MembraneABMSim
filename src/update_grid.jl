@@ -111,6 +111,18 @@ function rescale_domain!(agents::AllAgents, system_flat::AllAgentsFlat, grid_siz
     scaled_added_area = added_area_this_timestep/params.system.density
     scale_factor = sqrt((prev_area + scaled_added_area)/prev_area)
 
+    #apply the scale factor to the grid dimensions and agent positions
+    apply_scale_factor!(agents, system_flat, grid_size, scale_factor)
+end
+
+
+"""
+    apply_scale_factor!(agents::AllAgents, system_flat::AllAgentsFlat, grid_size::GridSize, scale_factor::Float64)
+
+Helper function to apply a scale factor to all agent positions and grid dimensions, preserving tether vectors for tethered agents.
+"""
+function apply_scale_factor!(agents::AllAgents, system_flat::AllAgentsFlat, grid_size::GridSize, scale_factor::Float64)
+
     #iterate through each agent and rescale position (if has tether, preserve tether to agent vector)
     for untethered_agent in Iterators.flatten((agents.OMP.OmpCF, agents.OMP.BamA, agents.LPS, agents.nascent.nascent_OMP, agents.nascent.nascent_LPS))
         #update position as agent property
@@ -144,6 +156,20 @@ function rescale_domain!(agents::AllAgents, system_flat::AllAgentsFlat, grid_siz
 
     #update dims
     grid_size.dims *= scale_factor
+
+    #if we are shrinking the domain, we also need to mod the tether points to ensure they are still within the domain
+    if scale_factor<1.0
+        for tethered_agent in Iterators.flatten((agents.OMP.OmpA, agents.OMP.LptD))
+            if tethered_agent.is_tethered
+                #update tether point as agent property
+                tethered_agent.tether_point = mod.(tethered_agent.tether_point, grid_size.dims)
+                #also update the tether point in the flat data structure
+                sorted_ix = system_flat.agent_ix_to_sorted_ix[tethered_agent.index]
+                system_flat.tether_points[2*sorted_ix-1] = tethered_agent.tether_point[1]
+                system_flat.tether_points[2*sorted_ix] = tethered_agent.tether_point[2]
+            end
+        end
+    end
 end
 
 
