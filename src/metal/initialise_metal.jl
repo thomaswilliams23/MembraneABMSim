@@ -40,11 +40,11 @@ end
 
 
 """
-    run_equilibration_metal!(agents::AllAgents, grid_size::GridSize, grid::Grid, system_flat_cpu::SystemFlatCPU, all_data_metal::AllDataMetal, grid_size_metal::GridSizeMetal, force_kernel, params::AllParams, equilibration_time::Float64; suppress_prints::Bool=false)
+    run_equilibration_metal!(agents::AllAgents, grid_size::GridSize, grid::SimGrid, system_flat_cpu::SystemFlatCPU, all_data_metal::AllDataMetal, grid_size_metal::GridSizeMetal, force_kernel, params::AllParams, equilibration_time::Float64; suppress_prints::Bool=false)
 
 Runs equilibration for a specified time using the Metal GPU backend. Synchronises data between CPU and GPU as needed to update the grid and resolve forces.
 """
-function run_equilibration_metal!(agents::AllAgents, grid_size::GridSize, grid::Grid, system_flat_cpu::SystemFlatCPU, all_data_metal::AllDataMetal, grid_size_metal::GridSizeMetal, force_kernel, params::AllParams, equilibration_time::Float64; suppress_prints::Bool=false)
+function run_equilibration_metal!(agents::AllAgents, grid_size::GridSize, grid::SimGrid, system_flat_cpu::SystemFlatCPU, all_data_metal::AllDataMetal, grid_size_metal::GridSizeMetal, force_kernel, params::AllParams, equilibration_time::Float64; suppress_prints::Bool=false)
 
     #run equilibration
     steps_since_grid_sync = 0
@@ -101,12 +101,12 @@ end
 
 
 """
-    run_membrane_shrinkage_metal!(agents::AllAgents, grid_size::GridSize, grid::Grid, system_flat_cpu::SystemFlatCPU, all_data_metal::AllDataMetal, grid_size_metal::GridSizeMetal, force_kernel, params::AllParams; suppress_prints::Bool=false)
+    run_membrane_shrinkage_metal!(agents::AllAgents, grid_size::GridSize, grid::SimGrid, system_flat_cpu::SystemFlatCPU, all_data_metal::AllDataMetal, grid_size_metal::GridSizeMetal, force_kernel, params::AllParams; suppress_prints::Bool=false)
 
 Runs an iterative membrane shrinkage procedure to remove holes in the initial configuration. Shrinks the domain iteratively, equilibrating at each step, until holes are removed 
 or a maximum number of shrinkage rounds is reached.
 """
-function run_membrane_shrinkage_metal!(agents::AllAgents, grid_size::GridSize, grid::Grid, system_flat_cpu::SystemFlatCPU, all_data_metal::AllDataMetal, grid_size_metal::GridSizeMetal, force_kernel, params::AllParams; suppress_prints::Bool=false)
+function run_membrane_shrinkage_metal!(agents::AllAgents, grid_size::GridSize, grid::SimGrid, system_flat_cpu::SystemFlatCPU, all_data_metal::AllDataMetal, grid_size_metal::GridSizeMetal, force_kernel, params::AllParams; suppress_prints::Bool=false)
 
     @assert !isnothing(params.system.max_hole_radius) "max_hole_radius must be specified in params.system to run membrane shrinkage."
 
