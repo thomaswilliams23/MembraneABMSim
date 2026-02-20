@@ -39,7 +39,7 @@ function initialise_system_cpu(params::AllParams; clear_existing_output::Bool=fa
         agents, grid_size, grid, system_flat_cpu = initialise_system_from_checkpoint(params; suppress_prints=suppress_prints)
     else
         #TODO: implement other initialisation methods?
-        error("Initialisation type $(params.initialisation.init_type) not recognised.")
+        error("Initialisation type $(params.init.method) not recognised.")
     end
 
     # return the initialised model
@@ -693,11 +693,10 @@ function run_membrane_shrinkage!(agents::AllAgents, grid_size::GridSize, grid::S
             end
 
             #shrink the domain
-            grid_size.dims *= (1.0 - shrinkage_factor)
-
             shrinkage_scale_factor = (1.0 - shrinkage_factor)
             apply_scale_factor!(agents, system_flat_cpu, grid_size, shrinkage_scale_factor)
 
+            #equilibrate again
             run_equilibration!(agents, grid_size, grid, system_flat_cpu, params, shrinkage_equilibration_time; suppress_prints=true)
 
             shrinkage_round_num += 1
