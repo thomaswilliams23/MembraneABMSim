@@ -153,6 +153,12 @@ function run_reps_quick_non_spatial_sim(config_pathname::String, nreps::Int)
 
         #run the sim
         run_quick_non_spatial_sim(config_fname; suppress_prints=true)
+
+        #now fix the output_dir in the config to match the actual output dir (with NON_SPATIAL_ prefix) so that downstream processing works correctly
+        open(config_fname, "w") do f
+            @reset params_this_sim.system.output_dir = "NON_SPATIAL_" * params_this_sim.system.output_dir
+            JSON3.pretty(f, JSON3.write(params_this_sim))
+        end
     end
 
     #helper for printing progress
