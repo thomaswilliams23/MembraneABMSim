@@ -9,8 +9,7 @@ TMP_*.jl
 .vscode/
 
 #ignore workbooks
-workbooks/*.ipynb
-workbooks/*.jl
+workbooks/*
 
 #some temporary configs
 config/sweep/*_OLD.json
