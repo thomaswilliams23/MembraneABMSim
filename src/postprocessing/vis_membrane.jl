@@ -300,7 +300,8 @@ end
                  centre_on_agent::Union{Tuple{String, Int}, Nothing}=nothing,
                  centre_on_agents::Union{Vector{Tuple{String, Int}}, Nothing}=nothing,
                  centre_at_point::Union{Vector{Float64}, SVector{2, Float64}}=[0.5, 0.5],
-                 show_tethers_yn::Bool=true, demarcate_new_LPS_yn::Bool=false)
+                 show_tethers_yn::Bool=true, demarcate_new_LPS_yn::Bool=false,
+                 show_insertion_states_yn::Bool=false)
 
 Plots all membrane agents to axis `ax`.
 """
@@ -309,7 +310,8 @@ function plot_agents!(ax::Axis, agents::AllAgents, dims::SVector{2, Float64},
     centre_on_agent::Union{Tuple{String, Int}, Nothing}=nothing,
     centre_on_agents::Union{Vector{Tuple{String, Int}}, Nothing}=nothing,
     centre_at_point::Union{Vector{Float64}, SVector{2, Float64}}=[0.5, 0.5],
-    show_tethers_yn::Bool=true, demarcate_new_LPS_yn::Bool=false)
+    show_tethers_yn::Bool=true, demarcate_new_LPS_yn::Bool=false,
+    show_insertion_states_yn::Bool=true)
 
     function _find_agent_position(agent_spec::Tuple{String, Int})
         agent = nothing
@@ -386,22 +388,24 @@ function plot_agents!(ax::Axis, agents::AllAgents, dims::SVector{2, Float64},
     )
 
     #plot outlines to indicate insertion states
-    for (i, ins_state) in enumerate(insertion_states)
-        if ins_state=="bound"
-            agent_colour = agent_colours[i]
-            poly!(ax, Circle(Point2f(agent_x_coords[i], agent_y_coords[i]), agent_radii[i]);
-                strokecolor = RGBA(agent_colour.r, agent_colour.g, agent_colour.b, 1.0),
-                linestyle = :dash,
-                strokewidth = 4,
-                color = :transparent
-            )
-        elseif ins_state=="embedding"
-            agent_colour = agent_colours[i]
-            poly!(ax, Circle(Point2f(agent_x_coords[i], agent_y_coords[i]), agent_radii[i]);
-                strokecolor = RGBA(agent_colour.r, agent_colour.g, agent_colour.b, 1.0),
-                strokewidth = 4,
-                color = :transparent
-            )
+    if show_insertion_states_yn
+        for (i, ins_state) in enumerate(insertion_states)
+            if ins_state=="bound"
+                agent_colour = agent_colours[i]
+                poly!(ax, Circle(Point2f(agent_x_coords[i], agent_y_coords[i]), agent_radii[i]);
+                    strokecolor = RGBA(agent_colour.r, agent_colour.g, agent_colour.b, 1.0),
+                    linestyle = :dash,
+                    strokewidth = 4,
+                    color = :transparent
+                )
+            elseif ins_state=="embedding"
+                agent_colour = agent_colours[i]
+                poly!(ax, Circle(Point2f(agent_x_coords[i], agent_y_coords[i]), agent_radii[i]);
+                    strokecolor = RGBA(agent_colour.r, agent_colour.g, agent_colour.b, 1.0),
+                    strokewidth = 4,
+                    color = :transparent
+                )
+            end
         end
     end
 
@@ -451,7 +455,8 @@ end
         centre_at_point::Union{Vector{Float64}, SVector{2, Float64}}=[0.5, 0.5],
         demarcate_new_LPS_yn::Bool=false,
         output_extension::String=".mp4",
-        show_tethers_yn::Bool=true
+        show_tethers_yn::Bool=true,
+        show_insertion_states_yn::Bool=true
     )
 
 Given an `out_path` - which must be a directory within the `out` directory - makes a movie
@@ -472,7 +477,8 @@ function make_membrane_movie(out_path::String;
     centre_at_point::Union{Vector{Float64}, SVector{2, Float64}}=[0.5, 0.5],
     demarcate_new_LPS_yn::Bool=false,
     output_extension::String=".mp4",
-    show_tethers_yn::Bool=true
+    show_tethers_yn::Bool=true,
+    show_insertion_states_yn::Bool=true
     )
 
     #check that the out_path exists and contains data
@@ -559,7 +565,8 @@ function make_membrane_movie(out_path::String;
             centre_on_agent=centre_on_agent,
             centre_at_point=centre_at_point,
             demarcate_new_LPS_yn=demarcate_new_LPS_yn, 
-            show_tethers_yn=show_tethers_yn
+            show_tethers_yn=show_tethers_yn,
+            show_insertion_states_yn=show_insertion_states_yn
         )
 
         #optionally plot time series
@@ -585,7 +592,8 @@ end
         centre_at_point::Union{Vector{Float64}, SVector{2, Float64}}=[0.5, 0.5],
         max_dims::Union{SVector{2, Float64}, Nothing}=nothing,
         demarcate_new_LPS_yn::Bool=false,
-        show_tethers_yn::Bool=true
+        show_tethers_yn::Bool=true,
+        show_insertion_states_yn::Bool=true
     )
 
 Given an `out_path` - which must be a directory within the `out` directory - makes a snapshot
@@ -597,7 +605,8 @@ function make_snapshot(out_path::String, time_val::Float64;
             centre_at_point::Union{Vector{Float64}, SVector{2, Float64}}=[0.5, 0.5],
             max_dims::Union{SVector{2, Float64}, Nothing}=nothing,
             demarcate_new_LPS_yn::Bool=false,
-            show_tethers_yn::Bool=true
+            show_tethers_yn::Bool=true,
+            show_insertion_states_yn::Bool=true
     )
 
     #check that the out_path exists and contains data
@@ -628,7 +637,9 @@ function make_snapshot(out_path::String, time_val::Float64;
     @load data_fname agents dims
 
     #initialise figure
-    fig = Figure()
+    fig = Figure(
+        size = (500, 500)
+    )
     ax = Axis(fig[1,1];
         backgroundcolor = :transparent,
         xgridvisible = false,
@@ -636,7 +647,8 @@ function make_snapshot(out_path::String, time_val::Float64;
         xticksvisible = false,
         yticksvisible = false,
         aspect = DataAspect(),
-        limits = (0, max_dims[1], 0, max_dims[2]))
+        limits = (0, max_dims[1], 0, max_dims[2]),
+    )
     hidedecorations!(ax; grid=false)
     hidespines!(ax)
 
@@ -646,8 +658,12 @@ function make_snapshot(out_path::String, time_val::Float64;
         centre_on_agents=centre_on_agents,
         centre_at_point=centre_at_point,
         demarcate_new_LPS_yn=demarcate_new_LPS_yn, 
-        show_tethers_yn=show_tethers_yn
+        show_tethers_yn=show_tethers_yn,
+        show_insertion_states_yn=show_insertion_states_yn
     )
+
+    #resize to layout to cut whitespace
+    resize_to_layout!(fig)
 
     #save figure
     if !isdir(joinpath("out", out_path, "snapshots"))
@@ -673,7 +689,8 @@ end
         centre_at_point::Union{Vector{Float64}, SVector{2, Float64}}=[0.5, 0.5],
         max_dims::Union{SVector{2, Float64}, Nothing}=nothing,
         demarcate_new_LPS_yn::Bool=false,
-        show_tethers_yn::Bool=true
+        show_tethers_yn::Bool=true,
+        show_insertion_states_yn::Bool=true
     )
 Makes snapshots at multiple time values specified in `time_vals` and saves them to `out_path`.
 Lightweight wrapper around `make_snapshot`.
@@ -684,7 +701,8 @@ function make_snapshots(out_path::String, time_vals::Vector{Float64};
     centre_at_point::Union{Vector{Float64}, SVector{2, Float64}}=[0.5, 0.5],
     max_dims::Union{SVector{2, Float64}, Nothing}=nothing,
     demarcate_new_LPS_yn::Bool=false,
-    show_tethers_yn::Bool=true
+    show_tethers_yn::Bool=true,
+    show_insertion_states_yn::Bool=true
     )
 
     for time_val in time_vals
@@ -694,7 +712,8 @@ function make_snapshots(out_path::String, time_vals::Vector{Float64};
             centre_at_point=centre_at_point,
             max_dims=max_dims, 
             demarcate_new_LPS_yn=demarcate_new_LPS_yn, 
-            show_tethers_yn=show_tethers_yn)
+            show_tethers_yn=show_tethers_yn,
+            show_insertion_states_yn=show_insertion_states_yn)
     end
 
 end
@@ -706,7 +725,8 @@ end
         centre_on_agents::Union{Vector{Tuple{String, Int}}, Nothing}=nothing,
         centre_at_point::Union{Vector{Float64}, SVector{2, Float64}}=[0.5, 0.5],
         demarcate_new_LPS_yn::Bool=false,
-        show_tethers_yn::Bool=true
+        show_tethers_yn::Bool=true,
+        show_insertion_states_yn::Bool=true
     )
 Given a list of output paths (directories within `out`) and a list of time values,
 makes snapshots for each system at each time value. First determines the maximum membrane
@@ -717,7 +737,8 @@ function make_snapshots_across_sweep(list_of_out_paths::Vector{String}, time_val
         centre_on_agents::Union{Vector{Tuple{String, Int}}, Nothing}=nothing,
         centre_at_point::Union{Vector{Float64}, SVector{2, Float64}}=[0.5, 0.5],
         demarcate_new_LPS_yn::Bool=false,
-        show_tethers_yn::Bool=true
+        show_tethers_yn::Bool=true,
+        show_insertion_states_yn::Bool=true
     )
 
     #first work out the maximum dimensions across all systems
@@ -747,6 +768,7 @@ function make_snapshots_across_sweep(list_of_out_paths::Vector{String}, time_val
             max_dims=max_dims, 
             demarcate_new_LPS_yn=demarcate_new_LPS_yn, 
             show_tethers_yn=show_tethers_yn,
+            show_insertion_states_yn=show_insertion_states_yn
         )
     end
 
