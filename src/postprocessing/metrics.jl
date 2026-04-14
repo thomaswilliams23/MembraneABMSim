@@ -166,6 +166,53 @@ function get_prop_old_LPS_closer_to_Lpt_than_BAM(agents::AllAgents, dims::SVecto
 end
 
 
+"""
+    get_mean_old_LPS_distance_to_Lpt(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+
+Computes the mean distance of LPS agents present at the start of the simulation to Lpt. Assumes a single LptD.
+"""
+function get_mean_old_LPS_distance_to_Lpt(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+    
+    LptD = agents.OMP.LptD[1]
+    total_distance = 0.0
+    total_old_LPS = 0
+    for LPS in agents.LPS
+        if LPS.arrival_time < 0.0
+            total_old_LPS += 1
+            total_distance += shortest_distance(LPS.position, LptD.position, dims)
+        end
+    end
+    if total_old_LPS == 0
+        return 0.0
+    else
+        return total_distance / total_old_LPS
+    end
+end
+
+
+"""
+    get_mean_old_LPS_distance_to_BAM(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+
+Computes the mean distance of LPS agents present at the start of the simulation to BamA. Assumes a single BamA.
+"""
+function get_mean_old_LPS_distance_to_BAM(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+
+    BamA = agents.OMP.BamA[1]
+    total_distance = 0.0
+    total_old_LPS = 0
+    for LPS in agents.LPS
+        if LPS.arrival_time < 0.0
+            total_old_LPS += 1
+            total_distance += shortest_distance(LPS.position, BamA.position, dims)
+        end
+    end
+    if total_old_LPS == 0
+        return 0.0
+    else
+        return total_distance / total_old_LPS
+    end
+end
+
 
 """
     get_LPS_clusters(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
