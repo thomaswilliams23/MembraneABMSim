@@ -14,7 +14,7 @@
         }
     },
     "num_reps": 10,
-    "default_config": "config/simulation/stickiness/contd.json",
+    "default_config": "config/simulation/stickiness/defaults_contd.json",
     "output_base_dir": "stickiness_sweep_contd",
     "checkpoint_sweep_config": "config/sweep/stickiness.json"
 }

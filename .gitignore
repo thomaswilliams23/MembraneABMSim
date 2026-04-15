@@ -17,7 +17,8 @@ config/simulation/BAM_Lpt_competition/defaults_orig.json
 config/simulation/BAM_Lpt_competition/defaults_contd.json
 config/simulation/LPS_stickiness_big_sim/defaults_OLD.json
 config/simulation/LPS_stickiness_and_diff/defaults_OLD.json
-config/simulation/stickiness/defaults_OLD.json
+config/simulation/stickiness/defaults_orig.json
+config/simulation/stickiness/defaults_contd.json
 
 config/sweep/stickiness_BAM_Lpt_orig.json
 config/sweep/stickiness_BAM_Lpt_contd.json
