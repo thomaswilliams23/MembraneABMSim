@@ -453,31 +453,49 @@ end
 """
     get_cutoff_time(params::AllParams)
 
-Computes the time at which the OmpA number plateaus (i.e. no further agents can be inserted).
+Computes the time at which each BamA first loses access to LPS (i.e. becomes stalled)
 """
 function get_cutoff_time(params::AllParams)
 
-    # get final OmpA number
+    # get final BamA number
     out_path = joinpath("out", params.system.output_dir)
     raw_data_dir = joinpath(out_path, "raw_data")
     max_time_ix = round(Int, params.system.t_max / params.system.vis_dt)
     fname_final = joinpath(raw_data_dir, @sprintf("sys_data_%d.jld2", max_time_ix))
     @load fname_final agents dims
-    final_OmpA_number = get_num_OmpA_agents(agents, dims, params)
+    final_BamA_number = length(agents.OMP.BamA)
+    if params.init.num_BamA != final_BamA_number
+        @warn "Number of BamA agents at final time point does not match initial number. Consider whether this metric is appropriate to compute."
+    end
 
-    # iterate backwards through time points to find when OmpA number plateaus
-    cutoff_time = params.system.t_max
-    for time_ix in (max_time_ix-1):-1:0
+    # iterate through time points to find first time at which no LPS are within the sensing radius of each BamA
+    cutoff_times = fill(NaN, final_BamA_number)
+    BAMs_cutoff = falses(final_BamA_number)
+    for time_ix in 0:max_time_ix
         fname_this_time_ix = joinpath(raw_data_dir, @sprintf("sys_data_%d.jld2", time_ix))
         @load fname_this_time_ix agents dims
-        OmpA_number_this_time = get_num_OmpA_agents(agents, dims, params)
-        if OmpA_number_this_time < final_OmpA_number
-            cutoff_time = time_ix * params.system.vis_dt
+        for (BamA_ix, BamA) in enumerate(agents.OMP.BamA)
+            if BAMs_cutoff[BamA_ix]
+                continue
+            end
+            has_LPS_in_sensing_radius = false
+            for LPS in agents.LPS
+                if shortest_distance(BamA.position, LPS.position, dims) < params.BamA.radius + params.LPS.radius + params.force.sensing_radius
+                    has_LPS_in_sensing_radius = true
+                    break
+                end
+            end
+            if !has_LPS_in_sensing_radius
+                cutoff_times[BamA_ix] = time_ix * params.system.vis_dt
+                BAMs_cutoff[BamA_ix] = true
+            end
+        end
+        if all(BAMs_cutoff)
             break
         end
     end
 
-    return cutoff_time
+    return cutoff_times
 end
 
 
