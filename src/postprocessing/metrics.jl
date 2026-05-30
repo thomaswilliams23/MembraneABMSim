@@ -449,6 +449,27 @@ function get_distance_between_BAMs(agents::AllAgents, dims::SVector{2, Float64},
 end
 
 
+"""
+    get_BAM_stalled_status(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+
+Returns a boolean vector of whether each BamA agent is stalled (i.e. has no LPS within its sensing radius).
+"""
+function get_BAM_stalled_status(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+    # iterate through time points to find first time at which no LPS are within the sensing radius of each BamA
+    BAMs_stalled_yn = trues(length(agents.OMP.BamA))
+    for (BamA_ix, BamA) in enumerate(agents.OMP.BamA)
+        for LPS in agents.LPS
+            if shortest_distance(BamA.position, LPS.position, dims) < params.BamA.radius + params.LPS.radius + params.force.sensing_radius
+                BAMs_stalled_yn[BamA_ix] = false
+                break
+            end
+        end
+    end
+
+    return BAMs_stalled_yn
+end
+
+
 
 """
     get_cutoff_time(params::AllParams)

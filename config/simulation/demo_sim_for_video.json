@@ -26,26 +26,17 @@
         "insertion_time": 1.0 
     },
     "init": {
-        "dim_x": 1.12,
-        "dim_y": 1.12,
+        "dim_x": 0.97,
+        "dim_y": 0.97,
         "num_OmpA": 0,
         "num_OmpCF": 0,
-        "num_LptD": 1,
+        "num_LptD": 0,
         "num_BamA": 1,
         "num_LPS": 200,
         "num_PP": 0,
-        "positions": {
-            "BamA": [
-                [0.506, 0.506]
-            ],
-            "LptD": [
-                [0.0, 0.0]
-            ]
-        },
-        "method": "specify_positions",
-        "equilibration_time": 0,
-        "complexes_assembled": true,
-        "shrink_to_size": false
+        "method": "random",
+        "equilibration_time": 10,
+        "complexes_assembled": true
     },
     "insertion": {
         "type": "lipid-dependent",
@@ -53,9 +44,9 @@
         "mu_rep" : 0.5,
         "mu_attr" : 0.5,
         "k_C": 0.5,
-        "PP_arrival_rate": 0.0,
-        "PP_bind_rate": 0.00,
-        "OMP_assembly_rate": 0.0
+        "PP_arrival_rate": 0.5,
+        "PP_bind_rate": 0.05,
+        "OMP_assembly_rate": 0.025
     },
     "force": {
         "temperature": 0,
@@ -72,10 +63,9 @@
     "system": {
         "density": 0.9,
         "dt": 0.0001,
-        "t_max": 10,
-        "vis_dt": 1.0,
-        "output_dir": "DEMO_for_figures",
-        "seed": 1,
-        "max_hole_radius": 0.048
+        "t_max": 500,
+        "vis_dt": 0.1,
+        "output_dir": "demo_sim_for_video",
+        "seed": 1
     }
 }
