@@ -36,12 +36,10 @@
         "num_PP": 0,
         "method": "random",
         "equilibration_time": 10,
-        "complexes_assembled": true,
-        "shrink_to_size": true,
-        "max_num_shrinkage_rounds": 20
+        "complexes_assembled": true
     },
     "insertion": {
-        "type": "lipid-dependent",
+        "type": "guaranteed",
         "attempt_dt": 0.1,
         "mu_rep" : 0.5,
         "mu_attr" : 0.5,
@@ -67,9 +65,7 @@
         "dt": 0.0001,
         "t_max": 500,
         "vis_dt": 1.0,
-        "output_dir": "TEST_LPS_stickiness_big_sim",
-        "seed": 1,
-        "device": "cuda",
-        "max_hole_radius": 0.05
+        "output_dir": "big_sim",
+        "seed": 1
     }
 }

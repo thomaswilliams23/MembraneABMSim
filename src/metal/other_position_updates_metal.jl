@@ -24,7 +24,8 @@ function compute_non_force_position_changes_metal!(
     nascent_added_area_lookup::NascentAddedAreaLookup,
     newly_tethered_agent_ixs::Vector{Int},
     params::AllParams,
-    t::Float64
+    t::Float64;
+    allow_membrane_growth::Bool=true
     )
 
 
@@ -34,21 +35,17 @@ function compute_non_force_position_changes_metal!(
     #update positions field on GPU
     copyto!(all_data_metal.positions, all_data_metal.next_positions[1:2*grid_size_metal.num_agents])
 
-
-    #first, compute the added area
-    added_area_this_timestep = compute_added_area(agents, params, nascent_added_area_lookup, t)
-    
-    #early exit
-    added_area_err = 1e-10
-    if added_area_this_timestep<added_area_err && length(newly_tethered_agent_ixs)==0
-        return
+    #first, compute the rescaling factor (if membrane growth allowed)
+    if allow_membrane_growth
+        added_area_this_timestep = compute_added_area(agents, params, nascent_added_area_lookup, t)
+        prev_area = prod(grid_size.dims)
+        scaled_added_area = added_area_this_timestep/params.system.density
+        scale_factor = sqrt((prev_area + scaled_added_area)/prev_area)
+        scale_factor_metal = Float32(scale_factor)
+    else
+        scale_factor = 1.0
+        scale_factor_metal = 1.0f0
     end
-
-    #compute the rescaling factor
-    prev_area = prod(grid_size.dims)
-    scaled_added_area = added_area_this_timestep/params.system.density
-    scale_factor = sqrt((prev_area + scaled_added_area)/prev_area)
-    scale_factor_metal = Float32(scale_factor)
 
     #now, call the kernel on all agents (GPU)
     #this has to account for
@@ -146,19 +143,22 @@ Metal GPU kernel for computing non-force position changes.
     end
 
     # compute new position and tether position due to domain rescaling
-    if is_tethered==1
-        agent_to_tether_vec = shortest_vec_metal(
-            SVector{2, Float32}(positions[2*sorted_ix-1], positions[2*sorted_ix]),
-            SVector{2, Float32}(tether_points[2*sorted_ix-1], tether_points[2*sorted_ix]),
-            dims
-        )
-    end
-    next_positions[2*sorted_ix-1] = scale_factor * positions[2*sorted_ix-1]
-    next_positions[2*sorted_ix]   = scale_factor * positions[2*sorted_ix]
-    if is_tethered==1
-        new_tether_pos = SVector{2, Float32}(next_positions[2*sorted_ix-1], next_positions[2*sorted_ix]) + agent_to_tether_vec
-        tether_points[2*sorted_ix-1] = new_tether_pos[1]
-        tether_points[2*sorted_ix] = new_tether_pos[2]
+    added_area_err = 1.0f-20
+    if abs(scale_factor - 1.0f0) > added_area_err
+        if is_tethered==1
+            agent_to_tether_vec = shortest_vec_metal(
+                SVector{2, Float32}(positions[2*sorted_ix-1], positions[2*sorted_ix]),
+                SVector{2, Float32}(tether_points[2*sorted_ix-1], tether_points[2*sorted_ix]),
+                dims
+            )
+        end
+        next_positions[2*sorted_ix-1] = scale_factor * positions[2*sorted_ix-1]
+        next_positions[2*sorted_ix]   = scale_factor * positions[2*sorted_ix]
+        if is_tethered==1
+            new_tether_pos = SVector{2, Float32}(next_positions[2*sorted_ix-1], next_positions[2*sorted_ix]) + agent_to_tether_vec
+            tether_points[2*sorted_ix-1] = new_tether_pos[1]
+            tether_points[2*sorted_ix] = new_tether_pos[2]
+        end
     end
 
 end

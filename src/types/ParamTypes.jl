@@ -89,6 +89,10 @@ struct InitConditions
     complexes_assembled::Union{Nothing, Bool}
     checkpoint_file::Union{Nothing, String}
     checkpoint_time::Union{Nothing, Float64}
+    shrink_to_size::Union{Nothing, Bool}
+    shrinkage_factor::Union{Nothing, Float64}
+    max_num_shrinkage_rounds::Union{Nothing, Int}
+    shrinkage_equilibration_time::Union{Nothing, Float64}
 end
 
 """
@@ -137,6 +141,7 @@ struct SystemParams
     t_max::Float64
     vis_dt::Float64
     output_dir::String
+    max_hole_radius::Union{Nothing, Float64}
     seed::Union{Nothing, Int}
     device::Union{Nothing, String}
 end

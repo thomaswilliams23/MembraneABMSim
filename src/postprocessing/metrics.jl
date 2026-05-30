@@ -35,6 +35,16 @@ end
 
 
 """
+    get_num_LPS_agents(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+
+Counts the number of LPS agents in the system.
+"""
+function get_num_LPS_agents(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+    return length(agents.LPS)
+end
+
+
+"""
     get_num_LPS_bordering_OMP(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
 
 Counts the number of LPS agents that are bordering any OMP agents.
@@ -110,6 +120,98 @@ function get_prop_LPS_bordering_OMP(agents::AllAgents, dims::SVector{2, Float64}
     end
 end
 
+
+
+"""
+    get_prop_LPS_closer_to_Lpt_than_BAM(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+
+Computes the proportion of LPS agents that are closer to Lpt than BAM. Assumes a single LptD and a single BamA.
+"""
+function get_prop_LPS_closer_to_Lpt_than_BAM(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+
+    BamA = agents.OMP.BamA[1]
+    LptD = agents.OMP.LptD[1]
+    LPS_closer_to_Lpt = 0
+    total_LPS = length(agents.LPS)
+    for LPS in agents.LPS
+        if shortest_distance(LPS.position, LptD.position, dims) < shortest_distance(LPS.position, BamA.position, dims)
+            LPS_closer_to_Lpt += 1
+        end
+    end
+    return LPS_closer_to_Lpt/total_LPS
+end
+
+
+
+"""
+    get_prop_old_LPS_closer_to_Lpt_than_BAM(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+
+Computes the proportion of LPS agents present at the start of the simulation that are closer to Lpt than BAM. Assumes a single LptD and a single BamA.
+"""
+function get_prop_old_LPS_closer_to_Lpt_than_BAM(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+
+    BamA = agents.OMP.BamA[1]
+    LptD = agents.OMP.LptD[1]
+    old_LPS_closer_to_Lpt = 0
+    total_old_LPS = 0
+    for LPS in agents.LPS
+        if LPS.arrival_time < 0.0
+            total_old_LPS += 1
+            if shortest_distance(LPS.position, LptD.position, dims) < shortest_distance(LPS.position, BamA.position, dims)
+                old_LPS_closer_to_Lpt += 1
+            end
+        end
+    end
+    return old_LPS_closer_to_Lpt/total_old_LPS
+end
+
+
+"""
+    get_mean_old_LPS_distance_to_Lpt(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+
+Computes the mean distance of LPS agents present at the start of the simulation to Lpt. Assumes a single LptD.
+"""
+function get_mean_old_LPS_distance_to_Lpt(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+    
+    LptD = agents.OMP.LptD[1]
+    total_distance = 0.0
+    total_old_LPS = 0
+    for LPS in agents.LPS
+        if LPS.arrival_time < 0.0
+            total_old_LPS += 1
+            total_distance += shortest_distance(LPS.position, LptD.position, dims)
+        end
+    end
+    if total_old_LPS == 0
+        return 0.0
+    else
+        return total_distance / total_old_LPS
+    end
+end
+
+
+"""
+    get_mean_old_LPS_distance_to_BAM(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+
+Computes the mean distance of LPS agents present at the start of the simulation to BamA. Assumes a single BamA.
+"""
+function get_mean_old_LPS_distance_to_BAM(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+
+    BamA = agents.OMP.BamA[1]
+    total_distance = 0.0
+    total_old_LPS = 0
+    for LPS in agents.LPS
+        if LPS.arrival_time < 0.0
+            total_old_LPS += 1
+            total_distance += shortest_distance(LPS.position, BamA.position, dims)
+        end
+    end
+    if total_old_LPS == 0
+        return 0.0
+    else
+        return total_distance / total_old_LPS
+    end
+end
 
 
 """
@@ -347,35 +449,74 @@ function get_distance_between_BAMs(agents::AllAgents, dims::SVector{2, Float64},
 end
 
 
+"""
+    get_BAM_stalled_status(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+
+Returns a boolean vector of whether each BamA agent is stalled (i.e. has no LPS within its sensing radius).
+"""
+function get_BAM_stalled_status(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+    # iterate through time points to find first time at which no LPS are within the sensing radius of each BamA
+    BAMs_stalled_yn = trues(length(agents.OMP.BamA))
+    for (BamA_ix, BamA) in enumerate(agents.OMP.BamA)
+        for LPS in agents.LPS
+            if shortest_distance(BamA.position, LPS.position, dims) < params.BamA.radius + params.LPS.radius + params.force.sensing_radius
+                BAMs_stalled_yn[BamA_ix] = false
+                break
+            end
+        end
+    end
+
+    return BAMs_stalled_yn
+end
+
+
 
 """
     get_cutoff_time(params::AllParams)
 
-Computes the time at which the OmpA number plateaus (i.e. no further agents can be inserted).
+Computes the time at which each BamA first loses access to LPS (i.e. becomes stalled)
 """
 function get_cutoff_time(params::AllParams)
 
-    # get final OmpA number
+    # get final BamA number
     out_path = joinpath("out", params.system.output_dir)
     raw_data_dir = joinpath(out_path, "raw_data")
     max_time_ix = round(Int, params.system.t_max / params.system.vis_dt)
     fname_final = joinpath(raw_data_dir, @sprintf("sys_data_%d.jld2", max_time_ix))
     @load fname_final agents dims
-    final_OmpA_number = get_num_OmpA_agents(agents, dims, params)
+    final_BamA_number = length(agents.OMP.BamA)
+    if params.init.num_BamA != final_BamA_number
+        @warn "Number of BamA agents at final time point does not match initial number. Consider whether this metric is appropriate to compute."
+    end
 
-    # iterate backwards through time points to find when OmpA number plateaus
-    cutoff_time = params.system.t_max
-    for time_ix in (max_time_ix-1):-1:0
+    # iterate through time points to find first time at which no LPS are within the sensing radius of each BamA
+    cutoff_times = fill(NaN, final_BamA_number)
+    BAMs_cutoff = falses(final_BamA_number)
+    for time_ix in 0:max_time_ix
         fname_this_time_ix = joinpath(raw_data_dir, @sprintf("sys_data_%d.jld2", time_ix))
         @load fname_this_time_ix agents dims
-        OmpA_number_this_time = get_num_OmpA_agents(agents, dims, params)
-        if OmpA_number_this_time < final_OmpA_number
-            cutoff_time = time_ix * params.system.vis_dt
+        for (BamA_ix, BamA) in enumerate(agents.OMP.BamA)
+            if BAMs_cutoff[BamA_ix]
+                continue
+            end
+            has_LPS_in_sensing_radius = false
+            for LPS in agents.LPS
+                if shortest_distance(BamA.position, LPS.position, dims) < params.BamA.radius + params.LPS.radius + params.force.sensing_radius
+                    has_LPS_in_sensing_radius = true
+                    break
+                end
+            end
+            if !has_LPS_in_sensing_radius
+                cutoff_times[BamA_ix] = time_ix * params.system.vis_dt
+                BAMs_cutoff[BamA_ix] = true
+            end
+        end
+        if all(BAMs_cutoff)
             break
         end
     end
 
-    return cutoff_time
+    return cutoff_times
 end
 
 
@@ -528,4 +669,40 @@ function get_LptD_insertion_times(params::AllParams)
     #extract insertion times
     insertion_times = [LptD.arrival_time for LptD in agents.OMP.LptD]
     return insertion_times
+end
+
+
+
+
+"""
+    get_num_new_and_old_LPS_in_sensing_radius(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+
+Returns a vector (of length n, where n is the number of BAMs) of dictionaries with the form 
+["old" => n_old, "new" => n_new], where n_old is the number of LPS present at the start of the simulation
+within the sensing radius of that BAM, and n_new is the number of LPS added during the simulation within
+the sensing radius of the BAM.
+"""
+function get_num_new_and_old_LPS_in_sensing_radius(agents::AllAgents, dims::SVector{2, Float64}, params::AllParams)
+
+    #initialise
+    all_num_LPS_in_sensing_radius = Dict[]
+
+    #loop
+    for (BAM_ix, BAM) in enumerate(agents.OMP.BamA)
+        n_old = 0
+        n_new = 0
+        #find LPS within the sensing radius
+        for LPS in agents.LPS
+            if shortest_distance(BAM.position, LPS.position, dims) < params.BamA.radius + params.LPS.radius + params.force.sensing_radius
+                if LPS.arrival_time < 0.0
+                    n_old += 1
+                else
+                    n_new += 1
+                end
+            end
+        end
+        push!(all_num_LPS_in_sensing_radius, Dict("old" => n_old, "new" => n_new))
+    end
+
+    return all_num_LPS_in_sensing_radius
 end

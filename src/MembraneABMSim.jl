@@ -49,6 +49,7 @@ module MembraneABMSim
     include("forces.jl")
     include("main.jl")
     include("nascent.jl")
+    include("non_spatial_control.jl")
     include("sweep.jl")
     include("update_grid.jl")
     include("utils.jl")
