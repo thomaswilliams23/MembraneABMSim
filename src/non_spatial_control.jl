@@ -55,7 +55,7 @@ function run_quick_non_spatial_sim(config_pathname::String; clear_existing_outpu
 
     #main loop
     steps_since_grid_sync = 0
-    MAX_STEPS_BETWEEN_GRID_SYNC = 100 #temporary
+    MAX_STEPS_BETWEEN_GRID_SYNC = 100 #TODO: make adaptive? calibrate?
     output_ix_interval = round(Int, params.system.vis_dt/params.system.dt)
     max_time_ix = round(Int, params.system.t_max/params.system.dt)
     for time_ix in 1:max_time_ix

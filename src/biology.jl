@@ -26,14 +26,15 @@ function update_BAM_subsystem!(agents::AllAgents, grid_size::GridSize, grid::Sim
                     continue
                 end
 
-                pr_free_to_bound = 1 - exp(-params.insertion.PP_bind_rate * (agents.num_PP/(prod(grid_size.dims)))*params.system.dt)
-                if rand()<pr_free_to_bound
-                    BamA.insertion_state = "bound"
+                pr_free_to_stalled = 1 - exp(-params.insertion.PP_bind_rate * (agents.num_PP/(prod(grid_size.dims)))*params.system.dt)
+                if rand()<pr_free_to_stalled
+                    BamA.insertion_state = "stalled"
                     agents.num_PP -= 1
                 end
+            end
 
-            #BamA in "bound state"
-            elseif BamA.insertion_state == "bound"
+            #BamA in "stalled" state (includes BamAs which have just become stalled this timestep)
+            if BamA.insertion_state == "stalled"
 
                 #check if we can attempt insertion this timestep
                 attempt_dt = params.insertion.attempt_dt

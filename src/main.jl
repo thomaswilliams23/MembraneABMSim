@@ -107,7 +107,7 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false, sup
 
     #main loop
     steps_since_grid_sync = 0
-    MAX_STEPS_BETWEEN_GRID_SYNC = 100 #temporary
+    MAX_STEPS_BETWEEN_GRID_SYNC = 100 #TODO: make adaptive? calibrate?
     max_time_ix = round(Int, params.system.t_max/params.system.dt)
     for time_ix in (1:max_time_ix) .+ time_ix_offset
 

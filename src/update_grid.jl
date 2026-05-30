@@ -256,7 +256,7 @@ function membrane_contains_hole(agents::AllAgents, grid_size::GridSize, params::
     end
 
     #otherwise, continue
-    PIXEL_GRID_WIDTH = params.system.max_hole_radius / 3.0 #temporary - need fine enough resolution to keep approximation error low, but not so fine that it becomes computationally expensive
+    PIXEL_GRID_WIDTH = params.system.max_hole_radius / 3.0 #TODO: hardcoded for now - need fine enough resolution to keep approximation error low, but not so fine that it becomes computationally expensive
     
     @inline function _mark_occupied_pixels!(occupied_grid::BitMatrix, agent_centre::SVector{2, Float64}, agent_radius::Float64, pixel_range::SVector{2, Int}, act_pixel_widths::SVector{2, Float64}, dims::SVector{2, Float64})
         #compute bounding box of pixels to check (accommodating periodic boundaries)

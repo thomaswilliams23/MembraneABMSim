@@ -612,7 +612,7 @@ function run_equilibration!(agents::AllAgents, grid_size::GridSize, grid::SimGri
 
     #run equilibration
     steps_since_grid_sync = 0
-    MAX_STEPS_BETWEEN_GRID_SYNC = 100 #temporary
+    MAX_STEPS_BETWEEN_GRID_SYNC = 100 #TODO: make adaptive? calibrate?
     t = 0.0
     time_err = 0.1 * params.system.dt
     while t < equilibration_time - time_err

@@ -142,7 +142,7 @@ function compile_flat_system_data_cpu!(system_flat::AllAgentsFlat, agents::AllAg
         system_flat.tether_points[2*sorted_ix-1] = untethered_val
         system_flat.tether_points[2*sorted_ix] = untethered_val
         system_flat.effective_radii[sorted_ix] = params.BamA.radius
-        if agent.insertion_state in ["free", "bound"]
+        if agent.insertion_state in ["free", "stalled"]
             system_flat.identifiers[sorted_ix] = make_identifier(;
                 is_tethered=false, 
                 agent_type="BamA", 

@@ -390,7 +390,7 @@ function plot_agents!(ax::Axis, agents::AllAgents, dims::SVector{2, Float64},
     #plot outlines to indicate insertion states
     if show_insertion_states_yn
         for (i, ins_state) in enumerate(insertion_states)
-            if ins_state=="bound"
+            if ins_state=="stalled"
                 agent_colour = agent_colours[i]
                 poly!(ax, Circle(Point2f(agent_x_coords[i], agent_y_coords[i]), agent_radii[i]);
                     strokecolor = RGBA(agent_colour.r, agent_colour.g, agent_colour.b, 1.0),
