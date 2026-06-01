@@ -4,7 +4,7 @@ A Julia package implementing an agent-based model for the Gram-negative outer me
 
 _This codebase is still in active development so implementation may change. Feel free to leave issues or get in contact with bugs, queries, or feature requests_
 
-> This branch is the version of the codebase used for Williams _et al._ 2026. Config files used to generate the simulation data can be found in `config/PAPER_1`. Note that simulations generated from these configs may differ slightly from those presented in the paper, since these were continued from checkpoints a few times, and RNG checkpointing has not been implemented yet.
+> This branch is the version of the codebase used for Williams _et al._ 2026. Config files used to generate the simulation data can be found in `config/PAPER_1`. Note that simulations generated from these configs may differ slightly from those presented in the paper, since these were continued from checkpoints a few times, and RNG checkpointing has not been implemented in the codebase yet.
 
 ## Quick start:
 
