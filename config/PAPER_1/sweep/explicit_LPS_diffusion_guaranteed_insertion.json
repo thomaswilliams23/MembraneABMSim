@@ -1,0 +1,11 @@
+{
+    "sweep_params": {
+        "force/temperature": {
+            "short_name": "diffusion",
+            "values": [0, 1e-6, 1e-5, 1e-4]
+        }
+    },
+    "num_reps": 10,
+    "default_config": "config/PAPER_1/simulation/explicit_LPS_diffusion/defaults_guaranteed_insertion.json",
+    "output_base_dir": "explicit_LPS_diffusion_guaranteed_insertion"
+}
