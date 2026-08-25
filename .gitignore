@@ -12,8 +12,8 @@ TMP_*.jl
 workbooks/*
 
 #configs (aside from nominated ones)
-config/simulation/*
-config/sweep/*
+#config/simulation/*
+#config/sweep/*
 
 !config/simulation/demo.json
 !config/sweep/demo.json

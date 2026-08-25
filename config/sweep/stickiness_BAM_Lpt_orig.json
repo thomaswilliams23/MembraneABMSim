@@ -1,0 +1,19 @@
+{
+    "sweep_params": {
+        "force/mu_attr_LPS_LPS": {
+            "short_name": "mu_attr_LPS_LPS",
+            "values": [0.01, 0.1, 0.5]
+        },
+        "force/mu_attr_OMP_LPS": {
+            "short_name": "mu_attr_OMP_LPS",
+            "values": [0.005, 0.025, 0.1]
+        },
+        "force/mu_attr_OMP_OMP": {
+            "short_name": "mu_attr_OMP_OMP",
+            "values": [0.005, 0.025, 0.1]
+        }
+    },
+    "num_reps": 10,
+    "default_config": "config/simulation/BAM_Lpt_competition/defaults_OLD.json",
+    "output_base_dir": "stickiness_sweep_BAM_Lpt"
+}
