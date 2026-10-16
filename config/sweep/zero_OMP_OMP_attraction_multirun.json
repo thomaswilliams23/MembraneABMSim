@@ -1,0 +1,7 @@
+{
+    "sweep_params": {
+    },
+    "num_reps": 10,
+    "default_config": "config/simulation/zero_OMP_OMP_attraction/defaults.json",
+    "output_base_dir": "zero_OMP_OMP_attraction_multirun"
+}
