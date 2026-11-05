@@ -489,7 +489,7 @@ function compute_attr_rep_force(agent_pos::SVector{2, Float64}, agent_rad::Float
         if dist<=rho*ideal_dist
             force_mag = max_repulsion
         elseif dist<ideal_dist && dist>rho*ideal_dist
-            force_mag = mu_rep*ideal_dist*log((dist-rho*ideal_dist)/(1.0-rho)*ideal_dist)
+            force_mag = mu_rep*ideal_dist*log((dist-rho*ideal_dist)/((1.0-rho)*ideal_dist))
             if force_mag < max_repulsion
                 force_mag = max_repulsion
             end
@@ -538,7 +538,7 @@ function compute_inserting_substrate_force(agent_pos::SVector{2, Float64}, neigh
     if dist<=rho*ideal_dist
         force_mag = max_repulsion
     elseif dist<ideal_dist && dist>rho*ideal_dist
-        force_mag = mu_rep*ideal_dist*log((dist-rho*ideal_dist)/(1.0-rho)*ideal_dist)
+        force_mag = mu_rep*ideal_dist*log((dist-rho*ideal_dist)/((1.0-rho)*ideal_dist))
         if force_mag < max_repulsion
             force_mag = max_repulsion
         end
