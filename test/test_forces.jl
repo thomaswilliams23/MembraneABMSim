@@ -447,14 +447,16 @@ end
     grid_size, grid, flat = setup_system(params, agents, L)
     @test tally(1, Dict(), grid_size, grid, flat) == SVector(0.0, 0.0)
 
-    # Known issue: when an agent's search window covers at least half the grid, the window is
-    # capped at ceil(num_cells/2) cells each side, which is more than num_cells shifts in total,
-    # so cells on the far side are visited (and their agents counted) twice. Two large LptD
-    # agents on the 1 x 1 demo domain trigger this.
-    agents = make_agents(LptD=[SVector(0.25, 0.5), SVector(0.74, 0.5)])
-    grid_size, grid, flat = setup_system(params, agents, 1.0)
-    @test_broken tally(1, Dict(), grid_size, grid, flat) ≈
-                 brute_force_tally(flat, 1, -1, params, 2, SVector(1.0, 1.0))
+    # search window covering the whole grid visits each cell once: two large LptD on a small
+    # domain, for an even (1 x 1, 10 cells) and odd (0.95 x 0.95, 9 cells) number of cells
+    for L_small in (1.0, 0.95)
+        agents = make_agents(LptD=[SVector(0.25, 0.5), SVector(0.72, 0.5)])
+        grid_size, grid, flat = setup_system(params, agents, L_small)
+        for s in 1:2
+            @test tally(s, Dict(), grid_size, grid, flat) ≈
+                  brute_force_tally(flat, s, -1, params, 2, SVector(L_small, L_small))
+        end
+    end
 end
 
 

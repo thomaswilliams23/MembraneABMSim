@@ -390,12 +390,14 @@ function tally_attr_rep_forces(sorted_ix::Int, sorted_substrate_inserting_ix::In
     #determine how many cells to search in each direction
     cell_buffer_num_x, cell_buffer_num_y = ceil.(Int, agent_buffer_radius./(grid_size.dims./grid_size.num_cells))
 
-    #cap cell intervals to avoid double-searching
-    cell_buffer_num_x = min(cell_buffer_num_x, ceil(Int, grid_size.num_cells[1] / 2))
-    cell_buffer_num_y = min(cell_buffer_num_y, ceil(Int, grid_size.num_cells[2] / 2))
+    #cap cell intervals so each cell is visited at most once (at most num_cells shifts per dimension)
+    x_lo = -min(cell_buffer_num_x, div(grid_size.num_cells[1], 2))
+    x_hi = min(cell_buffer_num_x, grid_size.num_cells[1] - 1 - div(grid_size.num_cells[1], 2))
+    y_lo = -min(cell_buffer_num_y, div(grid_size.num_cells[2], 2))
+    y_hi = min(cell_buffer_num_y, grid_size.num_cells[2] - 1 - div(grid_size.num_cells[2], 2))
 
     #loop over Moore neighbourhood
-    for x_shift in -cell_buffer_num_x:cell_buffer_num_x, y_shift in -cell_buffer_num_y:cell_buffer_num_y
+    for x_shift in x_lo:x_hi, y_shift in y_lo:y_hi
 
         #account for periodic boundaries
         neigh_cell_x = mod(agent_cell_ix + x_shift - 1, grid_size.num_cells[1]) + 1

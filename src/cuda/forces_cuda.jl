@@ -267,15 +267,17 @@ Tally the total attraction/repulsion forces acting on an agent from its neighbou
     cell_buffer_num_x = fast_floor_int32(agent_buffer_radius/(dims[1]/num_cells[1])) + 1
     cell_buffer_num_y = fast_floor_int32(agent_buffer_radius/(dims[2]/num_cells[2])) + 1
     
-    #cap cell intervals to avoid double-searching
-    cell_buffer_num_x = min(cell_buffer_num_x, div(num_cells[1], 2)+1)
-    cell_buffer_num_y = min(cell_buffer_num_y, div(num_cells[2], 2)+1)
+    #cap cell intervals so each cell is visited at most once (at most num_cells shifts per dimension)
+    x_lo = -min(cell_buffer_num_x, div(num_cells[1], 2))
+    x_hi = min(cell_buffer_num_x, num_cells[1] - 1 - div(num_cells[1], 2))
+    y_lo = -min(cell_buffer_num_y, div(num_cells[2], 2))
+    y_hi = min(cell_buffer_num_y, num_cells[2] - 1 - div(num_cells[2], 2))
 
     #loop over Moore neighbourhood
-    x_shift = -cell_buffer_num_x
-    while x_shift <= cell_buffer_num_x
-        y_shift = -cell_buffer_num_y
-        while y_shift <= cell_buffer_num_y
+    x_shift = x_lo
+    while x_shift <= x_hi
+        y_shift = y_lo
+        while y_shift <= y_hi
 
             #account for periodic boundaries
             neigh_cell_x = mod(agent_cell_ix + x_shift - 1, num_cells[1]) + 1
