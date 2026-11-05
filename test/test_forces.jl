@@ -13,7 +13,7 @@ const FP = (
     k_C = 3.0,
 )
 
-# attracttion-repulsion force on agent at `p` due to neighbour at `q`
+# attraction-repulsion force on agent at `p` due to neighbour at `q`
 attr_rep_force(p, q; mu_attr=FP.mu_attr, dims=FP.dims) = M.compute_attr_rep_force(
     p, FP.r_a, q, FP.r_b, dims, FP.sensing_radius,
     mu_attr, FP.mu_rep, FP.max_repulsion, FP.rho, FP.k_C)
@@ -81,8 +81,6 @@ end
     ϵ = 1e-9
     # attraction branch → 0 as dist ↓ ideal
     @test abs(signed_mag(IDEAL + ϵ)) < 1e-6
-    # Repulsion branch should → 0 as dist ↑ ideal. Currently fails: src/forces.jl:492 computes
-    # log((d-ρI)/(1-ρ)*I) rather than log((d-ρI)/((1-ρ)*I)), giving a jump of ~mu_rep*I*log(I).
-    # Switch to @test once the formula is fixed.
-    @test_broken abs(signed_mag(IDEAL - ϵ)) < 1e-6
+    # repulsion branch → 0 as dist ↑ ideal
+    @test abs(signed_mag(IDEAL - ϵ)) < 1e-6
 end

@@ -373,7 +373,7 @@ Compute the attraction/repulsion force between two agents in the CUDA simulation
         if dist<=rho*ideal_dist
             force_mag = max_repulsion
         elseif dist<ideal_dist && dist>rho*ideal_dist
-            force_mag = mu_rep*ideal_dist*log((dist-rho*ideal_dist)/(1.0f0-rho)*ideal_dist)
+            force_mag = mu_rep*ideal_dist*log((dist-rho*ideal_dist)/((1.0f0-rho)*ideal_dist))
             if force_mag < max_repulsion
                 force_mag = max_repulsion
             end
@@ -422,7 +422,7 @@ Compute the force between an inserting agent and the substrate agent it is inser
     if dist<=rho*ideal_dist
         force_mag = max_repulsion
     elseif dist<ideal_dist && dist>rho*ideal_dist
-        force_mag = mu_rep*ideal_dist*log((dist-rho*ideal_dist)/(1.0f0-rho)*ideal_dist)
+        force_mag = mu_rep*ideal_dist*log((dist-rho*ideal_dist)/((1.0f0-rho)*ideal_dist))
         if force_mag < max_repulsion
             force_mag = max_repulsion
         end
