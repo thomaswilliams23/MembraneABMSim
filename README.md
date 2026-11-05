@@ -43,6 +43,17 @@ MembraneABMSim.run_sweep("config/sweep/demo.json")
 
 Output is written to structured sub-directories of `out`. Sweeps can be analysed using the `analyse_sweep` function with a metric function (many such functions are in `src/postprocessing/metrics.jl`, or you can write your own). Processed data is saved to each of the structured output sub-directories to be used in plots, for example.
 
+## Running tests:
+
+Unit tests live in `test/` (`runtests.jl` includes one file per source area, e.g. `test_utils.jl`, `test_forces.jl`). Run them from the repo root with:
+
+```julia
+]activate .
+]test
+```
+
+or `julia --project -e 'using Pkg; Pkg.test()'`. Please run the tests before merging into `dev`, and add tests alongside new or changed functions. Tests marked `@test_broken` document known issues; switch them to `@test` once fixed.
+
 ## Setting up your own simulations:
 
 A tutorials page is forthcoming. For now, it is probably easiest to try copying the demo configs and tinkering with the parameters, and referring to the documentation.
