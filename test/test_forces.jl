@@ -76,20 +76,6 @@ end
 
 # --- whole-system helpers (agents, grid and flat data, as built by the simulation) ---
 
-# replace fields of an immutable struct by keyword
-with_fields(obj; kw...) = foldl((o, (k, v)) -> M.change_field(o, String(k), v), pairs(kw); init=obj)
-
-# demo parameters with selected "system" and "force" fields replaced
-function test_params(; system=(;), force=(;))
-    p = M.parse_config(DEMO_CONFIG)
-    p = M.change_field(p, "system", with_fields(p.system; system...))
-    return M.change_field(p, "force", with_fields(p.force; force...))
-end
-
-# all agents, in the same order the source iterates them
-agent_list(agents) = collect(Iterators.flatten((agents.OMP.OmpA, agents.OMP.OmpCF, agents.OMP.LptD,
-    agents.OMP.BamA, agents.LPS, agents.nascent.nascent_OMP, agents.nascent.nascent_LPS)))
-
 # build agents of each type at the given positions (indices 1..N), plus inserting-substrate
 # pairs: `nascent_OMP` = (BamA position, nascent position, effective radius, ideal distance),
 # `nascent_LPS` = (LptD position, nascent position, ideal distance)
@@ -146,9 +132,6 @@ function setup_system(params, agents, L)
     M.put_grid_in_sorted_order!(grid_size, grid, flat)
     return grid_size, grid, flat
 end
-
-flat_pos(flat, s) = SVector(flat.positions[2s-1], flat.positions[2s])
-sorted(flat, agent) = flat.agent_ix_to_sorted_ix[agent.index]
 
 # inserting-substrate partners, from the agent structs: sorted ix => (partner sorted ix, ideal distance)
 function partners(agents, flat)

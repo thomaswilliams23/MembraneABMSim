@@ -9,10 +9,33 @@ if !isdefined(Main, :MembraneABMSim)
 end
 const M = MembraneABMSim
 
-# demo simulation config, used as a base parameter set by several test files
+# --- helpers shared by several test files ---
+
+# demo simulation config, used as a base parameter set
 const DEMO_CONFIG = joinpath(@__DIR__, "..", "config", "simulation", "demo.json")
+
+# replace fields of an immutable struct by keyword
+with_fields(obj; kw...) = foldl((o, (k, v)) -> M.change_field(o, String(k), v), pairs(kw); init=obj)
+
+# demo parameters with selected fields replaced, by section, e.g. test_params(system=(dt=1e-3,))
+function test_params(; sections...)
+    p = M.parse_config(DEMO_CONFIG)
+    for (section, fields) in pairs(sections)
+        p = M.change_field(p, String(section), with_fields(getfield(p, section); fields...))
+    end
+    return p
+end
+
+# all agents, in the same order the source iterates them
+agent_list(agents) = collect(Iterators.flatten((agents.OMP.OmpA, agents.OMP.OmpCF, agents.OMP.LptD,
+    agents.OMP.BamA, agents.LPS, agents.nascent.nascent_OMP, agents.nascent.nascent_LPS)))
+
+# position of sorted agent `s` in the flat data, and an agent's sorted index
+flat_pos(flat, s) = SVector(flat.positions[2s-1], flat.positions[2s])
+sorted(flat, agent) = flat.agent_ix_to_sorted_ix[agent.index]
 
 @testset "MembraneABMSim" begin
     include("test_utils.jl")
     include("test_forces.jl")
+    include("test_initialise.jl")
 end
