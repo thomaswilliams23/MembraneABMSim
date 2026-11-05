@@ -1,4 +1,10 @@
-# Unit tests for pure helpers in src/utils.jl
+# Unit tests for the helpers in src/utils.jl, in source order:
+#   shortest_vec, shortest_distance, build_dense_morton, exposed_area, change_field,
+#   make_identifier, parse_identifier, is_interval_step, copy_data_to_cpu_yn,
+#   fast_floor_int32, get_centroid
+
+const DEMO_CONFIG = joinpath(@__DIR__, "..", "config", "simulation", "demo.json")
+
 
 @testset "shortest_vec / shortest_distance (periodic minimum image)" begin
     dims = SVector(1.0, 2.0)
@@ -36,35 +42,6 @@
         @test M.shortest_distance(p, q, dims) ≈ M.shortest_distance(q, p, dims)
         @test M.shortest_distance(p, q, dims) <= norm(dims ./ 2) + 1e-12
     end
-end
-
-
-@testset "make_identifier / parse_identifier round trip" begin
-    agent_types = ["OmpA", "OmpCF", "BamA", "LptD", "LPS"]
-
-    # (is_inserting, is_nascent, nascent_ix) combinations that occur in the code:
-    # plain agents carry nascent_ix=0; inserting/nascent agents use nascent_ix ≥ 1
-    # (see update_flat_data_nascent_agents!, src/biology.jl)
-    states = [(false, false, 0)]
-    for ix in (1, 2, 9, 10, 11, 50, 98)
-        push!(states, (true, false, ix))
-        push!(states, (false, true, ix))
-    end
-
-    for agent_type in agent_types, is_tethered in (false, true), (is_inserting, is_nascent, ix) in states
-        id = M.make_identifier(; is_tethered, agent_type, is_inserting, is_nascent, nascent_ix=ix)
-        parsed = M.parse_identifier(id)
-        @test parsed == (is_tethered, agent_type, is_nascent, is_inserting, ix)
-
-        # parity encodes OMP (odd) vs LPS (even); force code relies on `id & 1`
-        # (src/forces.jl, mu_attr selection), including for negative identifiers
-        @test (id & 1) == (agent_type == "LPS" ? 0 : 1)
-    end
-
-    @test_throws AssertionError M.make_identifier(; is_tethered=false, agent_type="LPS",
-                                                   is_inserting=false, is_nascent=true, nascent_ix=99)
-    @test_throws AssertionError M.make_identifier(; is_tethered=false, agent_type="BamA",
-                                                   is_inserting=true, is_nascent=true, nascent_ix=1)
 end
 
 
@@ -162,13 +139,133 @@ end
     @test_throws ErrorException M.change_field(obj, "d", 0)
 
     # nested replacement on real simulation parameters
-    params = M.parse_config(joinpath(@__DIR__, "..", "config", "simulation", "demo.json"))
+    params = M.parse_config(DEMO_CONFIG)
     new_system = M.change_field(params.system, "dt", 0.123)
     new_params = M.change_field(params, "system", new_system)
     @test new_params.system.dt == 0.123
     @test new_params.system.vis_dt == params.system.vis_dt
     @test new_params.force === params.force
     @test params.system.dt != 0.123
+end
+
+
+@testset "make_identifier / parse_identifier round trip" begin
+    agent_types = ["OmpA", "OmpCF", "BamA", "LptD", "LPS"]
+
+    # (is_inserting, is_nascent, nascent_ix) combinations that occur in the code:
+    # plain agents carry nascent_ix=0; inserting/nascent agents use nascent_ix ≥ 1
+    # (see update_flat_data_nascent_agents!, src/biology.jl)
+    states = [(false, false, 0)]
+    for ix in (1, 2, 9, 10, 11, 50, 98)
+        push!(states, (true, false, ix))
+        push!(states, (false, true, ix))
+    end
+
+    for agent_type in agent_types, is_tethered in (false, true), (is_inserting, is_nascent, ix) in states
+        id = M.make_identifier(; is_tethered, agent_type, is_inserting, is_nascent, nascent_ix=ix)
+        parsed = M.parse_identifier(id)
+        @test parsed == (is_tethered, agent_type, is_nascent, is_inserting, ix)
+
+        # parity encodes OMP (odd) vs LPS (even); force code relies on `id & 1`
+        # (src/forces.jl, mu_attr selection), including for negative identifiers
+        @test (id & 1) == (agent_type == "LPS" ? 0 : 1)
+    end
+
+    @test_throws AssertionError M.make_identifier(; is_tethered=false, agent_type="LPS",
+                                                   is_inserting=false, is_nascent=true, nascent_ix=99)
+    @test_throws AssertionError M.make_identifier(; is_tethered=false, agent_type="BamA",
+                                                   is_inserting=true, is_nascent=true, nascent_ix=1)
+end
+
+
+@testset "is_interval_step" begin
+    # step indices (0-based) at which the check fires, for t built either exactly or by accumulation
+    function hit_steps(interval, dt, n_steps; accumulate=false)
+        hits = Int[]
+        t = 0.0
+        for k in 0:n_steps
+            t_k = accumulate ? t : k * dt
+            M.is_interval_step(t_k, interval, dt) && push!(hits, k)
+            t += dt
+        end
+        return hits
+    end
+
+    for (interval, dt) in ((0.1, 1e-4), (0.25, 0.01), (20.0, 0.01), (1.0, 0.1))
+        k_per = round(Int, interval / dt)
+        n_steps = 5 * k_per
+        expected = collect(0:k_per:n_steps)                  # includes t = 0
+        @test hit_steps(interval, dt, n_steps) == expected
+        @test hit_steps(interval, dt, n_steps; accumulate=true) == expected
+    end
+
+    # interval not a whole number of steps: rounded to the nearest, still one hit per period
+    @test hit_steps(0.104, 0.01, 50) == collect(0:10:50)
+    @test hit_steps(0.106, 0.01, 55) == collect(0:11:55)
+
+    # interval shorter than a step: fires every step
+    @test hit_steps(0.001, 0.01, 20) == collect(0:20)
+end
+
+
+@testset "copy_data_to_cpu_yn" begin
+    # parameters with easily distinguishable time scales
+    function make_params(; dt, attempt_dt, vis_dt)
+        p = M.parse_config(DEMO_CONFIG)
+        system = M.change_field(M.change_field(p.system, "dt", dt), "vis_dt", vis_dt)
+        insertion = M.change_field(p.insertion, "attempt_dt", attempt_dt)
+        return M.change_field(M.change_field(p, "system", system), "insertion", insertion)
+    end
+    params = make_params(dt=0.01, attempt_dt=0.1, vis_dt=0.25)
+
+    BamA(state) = M.BamAAgent(1, SVector(0.5, 0.5), 0.0, false, state)
+    no_BamA = M.BamAAgent[]
+    stalled = [BamA("free"), BamA("stalled")]
+    not_stalled = [BamA("free"), BamA("free")]
+
+    # next step is a visualisation time: always copy
+    @test M.copy_data_to_cpu_yn(no_BamA, params, 0.24)
+    @test M.copy_data_to_cpu_yn(not_stalled, params, 0.24)
+
+    # next step is an insertion attempt time (not a vis time): copy only if a BamA is stalled
+    @test M.copy_data_to_cpu_yn(stalled, params, 0.29)
+    @test !M.copy_data_to_cpu_yn(not_stalled, params, 0.29)
+    @test !M.copy_data_to_cpu_yn(no_BamA, params, 0.29)
+
+    # next step is neither: never copy
+    @test !M.copy_data_to_cpu_yn(stalled, params, 0.31)
+
+    # Step alignment over a run, with t accumulated as t += dt (so floating-point drift is
+    # included). A copy must happen on exactly the step before each output step, using
+    # run_sim's convention mod(time_ix, round(vis_dt/dt)) == 0, and, if a BamA is stalled,
+    # also on the step before each insertion attempt step.
+    function copy_steps(agents, params, n_steps)
+        steps = Int[]
+        t = 0.0
+        for k in 0:n_steps
+            M.copy_data_to_cpu_yn(agents, params, t) && push!(steps, k)
+            t += params.system.dt
+        end
+        return steps
+    end
+    function expected_steps(params, n_steps; with_attempts)
+        dt = params.system.dt
+        k_vis = round(Int, params.system.vis_dt / dt)
+        k_att = round(Int, params.insertion.attempt_dt / dt)
+        return [k for k in 0:n_steps
+                if mod(k + 1, k_vis) == 0 || (with_attempts && mod(k + 1, k_att) == 0)]
+    end
+
+    long_vis = make_params(dt=0.01, attempt_dt=0.1, vis_dt=20.0)
+    for p in (params, long_vis)
+        n_steps = 3 * round(Int, p.system.vis_dt / p.system.dt)
+        @test copy_steps(no_BamA, p, n_steps) == expected_steps(p, n_steps; with_attempts=false)
+        @test copy_steps(not_stalled, p, n_steps) == expected_steps(p, n_steps; with_attempts=false)
+        @test copy_steps(stalled, p, n_steps) == expected_steps(p, n_steps; with_attempts=true)
+    end
+
+    # exactly one copy per vis time, even when vis_dt ≫ dt
+    @test length(copy_steps(no_BamA, long_vis, 4000)) == 2
 end
 
 
@@ -223,79 +320,4 @@ end
 
         @test M.shortest_distance(M.get_centroid(reverse(pts), dims), c, dims) < 1e-12
     end
-end
-
-
-@testset "copy_data_to_cpu_yn" begin
-    # parameters with easily distinguishable time scales
-    function make_params(; dt, attempt_dt, vis_dt)
-        p = M.parse_config(joinpath(@__DIR__, "..", "config", "simulation", "demo.json"))
-        system = M.change_field(M.change_field(p.system, "dt", dt), "vis_dt", vis_dt)
-        insertion = M.change_field(p.insertion, "attempt_dt", attempt_dt)
-        return M.change_field(M.change_field(p, "system", system), "insertion", insertion)
-    end
-    params = make_params(dt=0.01, attempt_dt=0.1, vis_dt=0.25)
-
-    BamA(state) = M.BamAAgent(1, SVector(0.5, 0.5), 0.0, false, state)
-    no_BamA = M.BamAAgent[]
-    stalled = [BamA("free"), BamA("stalled")]
-    not_stalled = [BamA("free"), BamA("free")]
-
-    # next step is a visualisation time: always copy
-    @test M.copy_data_to_cpu_yn(no_BamA, params, 0.24)
-    @test M.copy_data_to_cpu_yn(not_stalled, params, 0.24)
-
-    # next step is an insertion attempt time (not a vis time): copy only if a BamA is stalled
-    @test M.copy_data_to_cpu_yn(stalled, params, 0.29)
-    @test !M.copy_data_to_cpu_yn(not_stalled, params, 0.29)
-    @test !M.copy_data_to_cpu_yn(no_BamA, params, 0.29)
-
-    # next step is neither: never copy
-    @test !M.copy_data_to_cpu_yn(stalled, params, 0.31)
-
-    # robust to floating-point drift in accumulated time
-    function count_copies(agents, params, t_end)
-        t, n = 0.0, 0
-        while t < t_end - params.system.dt / 2
-            n += M.copy_data_to_cpu_yn(agents, params, t)
-            t += params.system.dt
-        end
-        return n
-    end
-    @test count_copies(not_stalled, params, 1.0) == 4      # 0.25, 0.5, 0.75, 1.0
-    @test count_copies(stalled, params, 1.0) == 12         # 0.1, 0.2, …, 1.0 plus 0.25, 0.75
-
-    # exactly one copy per vis time, even when vis_dt ≫ dt
-    long_vis = make_params(dt=0.01, attempt_dt=0.1, vis_dt=20.0)
-    @test count_copies(no_BamA, long_vis, 40.0) == 2
-end
-
-
-@testset "is_interval_step" begin
-    # step indices (0-based) at which the check fires, for t built either exactly or by accumulation
-    function hit_steps(interval, dt, n_steps; accumulate=false)
-        hits = Int[]
-        t = 0.0
-        for k in 0:n_steps
-            t_k = accumulate ? t : k * dt
-            M.is_interval_step(t_k, interval, dt) && push!(hits, k)
-            t += dt
-        end
-        return hits
-    end
-
-    for (interval, dt) in ((0.1, 1e-4), (0.25, 0.01), (20.0, 0.01), (1.0, 0.1))
-        k_per = round(Int, interval / dt)
-        n_steps = 5 * k_per
-        expected = collect(0:k_per:n_steps)                  # includes t = 0
-        @test hit_steps(interval, dt, n_steps) == expected
-        @test hit_steps(interval, dt, n_steps; accumulate=true) == expected
-    end
-
-    # interval not a whole number of steps: rounded to the nearest, still one hit per period
-    @test hit_steps(0.104, 0.01, 50) == collect(0:10:50)
-    @test hit_steps(0.106, 0.01, 55) == collect(0:11:55)
-
-    # interval shorter than a step: fires every step
-    @test hit_steps(0.001, 0.01, 20) == collect(0:20)
 end
