@@ -265,10 +265,37 @@ end
     @test count_copies(not_stalled, params, 1.0) == 4      # 0.25, 0.5, 0.75, 1.0
     @test count_copies(stalled, params, 1.0) == 12         # 0.1, 0.2, …, 1.0 plus 0.25, 0.75
 
-    # Should be exactly one copy per vis time when vis_dt ≫ dt. Known issue: the tolerance
-    # 0.1*dt is applied to t/vis_dt (a dimensionless ratio) rather than to t itself, so the
-    # effective time window is 0.1*dt*vis_dt, which spans several steps once vis_dt > 10.
-    # (Extra copies only cost performance.) Same applies to the attempt_dt check.
+    # exactly one copy per vis time, even when vis_dt ≫ dt
     long_vis = make_params(dt=0.01, attempt_dt=0.1, vis_dt=20.0)
-    @test_broken count_copies(no_BamA, long_vis, 40.0) == 2
+    @test count_copies(no_BamA, long_vis, 40.0) == 2
+end
+
+
+@testset "is_interval_step" begin
+    # step indices (0-based) at which the check fires, for t built either exactly or by accumulation
+    function hit_steps(interval, dt, n_steps; accumulate=false)
+        hits = Int[]
+        t = 0.0
+        for k in 0:n_steps
+            t_k = accumulate ? t : k * dt
+            M.is_interval_step(t_k, interval, dt) && push!(hits, k)
+            t += dt
+        end
+        return hits
+    end
+
+    for (interval, dt) in ((0.1, 1e-4), (0.25, 0.01), (20.0, 0.01), (1.0, 0.1))
+        k_per = round(Int, interval / dt)
+        n_steps = 5 * k_per
+        expected = collect(0:k_per:n_steps)                  # includes t = 0
+        @test hit_steps(interval, dt, n_steps) == expected
+        @test hit_steps(interval, dt, n_steps; accumulate=true) == expected
+    end
+
+    # interval not a whole number of steps: rounded to the nearest, still one hit per period
+    @test hit_steps(0.104, 0.01, 50) == collect(0:10:50)
+    @test hit_steps(0.106, 0.01, 55) == collect(0:11:55)
+
+    # interval shorter than a step: fires every step
+    @test hit_steps(0.001, 0.01, 20) == collect(0:20)
 end

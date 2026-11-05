@@ -37,9 +37,7 @@ function update_BAM_subsystem!(agents::AllAgents, grid_size::GridSize, grid::Sim
             if BamA.insertion_state == "stalled"
 
                 #check if we can attempt insertion this timestep
-                attempt_dt = params.insertion.attempt_dt
-                attempt_dt_err = 0.1*attempt_dt
-                if abs(t/attempt_dt - round(t/attempt_dt))<attempt_dt_err
+                if is_interval_step(t, params.insertion.attempt_dt, params.system.dt)
 
                     #decide if insertion accepted
                     if params.insertion.type == "guaranteed"
