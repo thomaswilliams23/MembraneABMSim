@@ -17,3 +17,6 @@ config/sweep/*
 
 !config/simulation/demo.json
 !config/sweep/demo.json
+
+#CLAUDE.md file
+CLAUDE.md
