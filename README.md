@@ -52,7 +52,19 @@ Unit tests live in `test/` (`runtests.jl` includes one file per source area, e.g
 ]test
 ```
 
-or `julia --project -e 'using Pkg; Pkg.test()'`. Please run the tests before merging into `dev`, and add tests alongside new or changed functions. Tests marked `@test_broken` document known issues; switch them to `@test` once fixed.
+or `julia --project -e 'using Pkg; Pkg.test()'`. To run only some test files, name them (any of `"utils"`, `"forces"`, `"initialise"`):
+
+```sh
+julia --project -e 'using Pkg; Pkg.test(test_args=["forces"])'
+```
+
+Each test file can also be run on its own from a REPL (quick to repeat once the package has loaded):
+
+```julia
+include("test/test_forces.jl")
+```
+
+Please run the tests before merging into `dev`, and add tests alongside new or changed functions. Tests marked `@test_broken` document known issues; switch them to `@test` once fixed.
 
 ## Setting up your own simulations:
 

@@ -7,6 +7,8 @@
 # wrap, "aggregate = sum of pairwise calls"), never exact force values, so they survive
 # changes to the force laws.
 
+include(joinpath(@__DIR__, "setup.jl"))
+
 
 # representative force parameters (cf. "force" in config/simulation/demo.json)
 const FP = (

@@ -22,10 +22,12 @@ MembraneABMSim.run_sweep("config/sweep/demo.json")
 Tests:
 
 ```sh
-julia --project -e 'using Pkg; Pkg.test()'
+julia --project -e 'using Pkg; Pkg.test()'                          # all files
+julia --project -e 'using Pkg; Pkg.test(test_args=["forces"])'      # selected files: utils, forces, initialise
+julia --project -e 'include("test/test_forces.jl")'                  # one file directly (also works from a REPL)
 ```
 
-- There is no per-test runner. To run a single test file quickly, include `test/runtests.jl`'s preamble (everything above the `@testset` block: package include, `M = MembraneABMSim`, shared helpers), then `include("test/test_<area>.jl")`.
+- New test files go in `test/test_<name>.jl`. Start each with `include(joinpath(@__DIR__, "setup.jl"))` and add the name to `TEST_FILES` in `test/runtests.jl`.
 - `Metal` and `CUDA` are hard dependencies loaded at module load. Errors from them on machines without that GPU are expected and can be ignored.
 
 ## Architecture
@@ -70,7 +72,7 @@ julia --project -e 'using Pkg; Pkg.test()'
 
 ## Tests
 
-- `test/runtests.jl` holds the shared helpers: `DEMO_CONFIG`; `test_params(; section=(field=value,)...)`, which builds demo params with fields overridden (immutable structs are edited with `change_field`); `agent_list`, `flat_pos`, `sorted`.
+- `test/setup.jl` loads the package and defines the shared helpers, guarded so it can be included repeatedly. The helpers are: `DEMO_CONFIG`; `test_params(; section=(field=value,)...)`, which builds demo params with fields overridden (immutable structs are edited with `change_field`); `agent_list`, `flat_pos`, `sorted`.
 - There is one test file per source file, with testsets in source order and a header listing the functions covered.
 - Physics tests check invariants only: zeros, saturation, sign, bounds, continuity, Newton's third law, periodic wrap, and "aggregate = sum of pairwise calls". They must not pin exact force-law values, because the functional forms may change.
 - Known bugs are recorded as `@test_broken` and switched to `@test` once fixed.

@@ -6,6 +6,8 @@
 #
 # Not yet covered (they run dynamics): run_equilibration!, run_membrane_shrinkage!
 
+include(joinpath(@__DIR__, "setup.jl"))
+
 
 # small demo system, no equilibration, output to a fresh temporary directory
 # (joinpath("out", abs_path) == abs_path, so nothing is written into the repo)
