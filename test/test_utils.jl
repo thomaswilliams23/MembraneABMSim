@@ -3,8 +3,6 @@
 #   make_identifier, parse_identifier, is_interval_step, copy_data_to_cpu_yn,
 #   fast_floor_int32, get_centroid
 
-const DEMO_CONFIG = joinpath(@__DIR__, "..", "config", "simulation", "demo.json")
-
 
 @testset "shortest_vec / shortest_distance (periodic minimum image)" begin
     dims = SVector(1.0, 2.0)
