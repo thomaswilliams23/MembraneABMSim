@@ -28,9 +28,8 @@ end
         for n in (1, 2, 3, 7, 10, 16, 33)
             @test morton_is_bijection(n, n)
         end
-        # non-square domains are not supported yet: the maps use rows and columns inconsistently
-        @test_broken morton_is_bijection(4, 7)
-        @test_broken morton_is_bijection(9, 2)
+        @test morton_is_bijection(4, 7)
+        @test morton_is_bijection(9, 2)
     end
 
     @testset "sync_grid! puts every agent in its own cell" begin
@@ -42,6 +41,19 @@ end
             @test all(iszero, moved_since_rebuild(state))
             @test consistency_errors(state, ps) == String[]      # with zero slack: exact cells
             @test state.steps_since_grid_sync == 0
+        end
+    end
+
+    @testset "non-square domains: grid consistent and forces match the oracle" begin
+        p = quiet_params(system=(max_steps_between_grid_sync=10^6,))
+        for L in ((1.6, 0.7), (0.7, 1.6))
+            state, ps = random_state(p; OmpA=3, OmpCF=2, LptD=1, BamA=1, LPS=120, L=L, rng=Xoshiro(8))
+            @test state.grid_size.num_cells[1] != state.grid_size.num_cells[2]
+            @test consistency_errors(state, ps) == String[]
+            @test force_step_matches_oracle(state, ps)
+            run_steps!(state, ps, 200)                 # stale grid
+            @test consistency_errors(state, ps) == String[]
+            @test force_step_matches_oracle(state, ps)
         end
     end
 

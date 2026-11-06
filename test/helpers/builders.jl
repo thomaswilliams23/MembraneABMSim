@@ -120,18 +120,20 @@ end
                  assembled=true, num_PP=0, rng=Xoshiro(1), device="cpu") -> (state, params)
 
 Builds a `SimState` with the given numbers of agents placed uniformly at random (overlaps
-allowed, no equilibration), through the package's "random" initialisation. This is the one
+allowed, no equilibration), through the package's "random" initialisation. `L` is the side of a
+square domain, or a pair `(Lx, Ly)` for a rectangular one. This is the one
 initialisation every backend supports, and with the same `rng` it places agents identically on
 every backend.
 """
 function random_state(params::M.AllParams;
                       OmpA::Int=0, OmpCF::Int=0, LptD::Int=0, BamA::Int=0, LPS::Int=0,
-                      L::Real=params.init.dim_x, assembled::Bool=true, num_PP::Int=0,
+                      L=params.init.dim_x, assembled::Bool=true, num_PP::Int=0,
                       rng::AbstractRNG=Xoshiro(1), device::String="cpu")
+    Lx, Ly = L isa Real ? (L, L) : L
     p = params_with(params;
         init=(
             method="random",
-            dim_x=Float64(L), dim_y=Float64(L),
+            dim_x=Float64(Lx), dim_y=Float64(Ly),
             num_OmpA=OmpA, num_OmpCF=OmpCF, num_LptD=LptD, num_BamA=BamA, num_LPS=LPS, num_PP=num_PP,
             positions=nothing,
             equilibration_time=0.0,

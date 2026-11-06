@@ -23,9 +23,9 @@ function gpu_available(backend)
 end
 
 # the same random membrane built on the CPU and on `backend`
-twin_states(params, backend; n...) = (
-    random_state(params; n..., L=1.0, rng=Xoshiro(11), device="cpu"),
-    random_state(params; n..., L=1.0, rng=Xoshiro(11), device=backend))
+twin_states(params, backend; L=1.0, n...) = (
+    random_state(params; n..., L=L, rng=Xoshiro(11), device="cpu"),
+    random_state(params; n..., L=L, rng=Xoshiro(11), device=backend))
 
 # largest distance between the same agent in two states (optionally only agents passing `which`)
 function max_position_gap(a::M.SimState, b::M.SimState; which=i -> true)
@@ -88,6 +88,16 @@ const F32_POS_TOL = 10 * eps(Float32)
                 M.copy_to_host!(gpu)
                 @test max_position_gap(cpu, gpu) < 1e-5           # ~8x Float32 resolution (measured ~2e-7)
                 @test cpu.grid_size.dims == gpu.grid_size.dims
+            end
+
+            @testset "trajectories agree with the CPU on a non-square domain" begin
+                (cpu, ps), (gpu, _) = twin_states(quiet_params(), backend; L=(1.6, 0.7), OmpA=4, OmpCF=2, LptD=1, BamA=2, LPS=150)
+                @test gpu.grid_size.num_cells[1] != gpu.grid_size.num_cells[2]
+                run_steps!(cpu, ps, 20)
+                run_steps!(gpu, ps, 20)
+                M.copy_to_host!(gpu)
+                @test max_position_gap(cpu, gpu) < 1e-5
+                @test consistency_errors(gpu, ps) == String[]
             end
 
             @testset "with insertions: same decisions as the CPU, consistent" begin

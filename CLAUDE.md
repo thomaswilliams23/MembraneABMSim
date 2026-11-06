@@ -54,7 +54,6 @@ julia --project -e 'include("test/fast/test_step.jl")'                   # one f
 **Spatial grid** (src/update_grid.jl):
 - Cell width is about `force.sensing_radius`. Cells are numbered in dense Morton (z) order (`build_dense_morton`, src/utils.jl), and agents are sorted by cell so neighbours sit close in memory.
 - The grid is rebuilt only when agents are added, or every `max_steps_between_grid_sync(params)` steps (optional config key `system.max_steps_between_grid_sync`, default 100). Between rebuilds, the neighbour search widens its window by `agg_dist_since_grid_sync`, the distance agents have moved since the last rebuild.
-- Square domains only: non-square Morton indexing is a known `@test_broken`.
 
 **Compact identifiers** (`make_identifier` / `parse_identifier`, src/utils.jl) pack each agent's type, tethered flag, inserting/nascent state and nascent index into one Int for the flat arrays:
 - The sign means tethered.
