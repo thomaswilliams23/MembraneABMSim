@@ -22,12 +22,13 @@ MembraneABMSim.run_sweep("config/sweep/demo.json")
 Tests:
 
 ```sh
-julia --project -e 'using Pkg; Pkg.test()'                          # all files
-julia --project -e 'using Pkg; Pkg.test(test_args=["forces"])'      # selected files: utils, forces, initialise
-julia --project -e 'include("test/test_forces.jl")'                  # one file directly (also works from a REPL)
+julia --project -e 'using Pkg; Pkg.test()'                              # fast + gpu tiers (default, ~1 min)
+julia --project -e 'using Pkg; Pkg.test(test_args=["slow"])'            # one tier: fast, slow or gpu ("all" for every tier)
+julia --project -e 'using Pkg; Pkg.test(test_args=["biology", "step"])' # named files, from any tier
+julia --project -e 'include("test/fast/test_step.jl")'                   # one file directly (also works from a REPL)
 ```
 
-- New test files go in `test/test_<name>.jl`. Start each with `include(joinpath(@__DIR__, "setup.jl"))` and add the name to `TEST_FILES` in `test/runtests.jl`.
+- New test files go in `test/<tier>/test_<name>.jl` and are picked up automatically. Start each with `include(joinpath(@__DIR__, "..", "helpers", "setup.jl"))`.
 - `Metal` and `CUDA` are hard dependencies loaded at module load. Errors from them on machines without that GPU are expected and can be ignored.
 
 ## Architecture
@@ -52,7 +53,7 @@ julia --project -e 'include("test/test_forces.jl")'                  # one file 
 
 **Spatial grid** (src/update_grid.jl):
 - Cell width is about `force.sensing_radius`. Cells are numbered in dense Morton (z) order (`build_dense_morton`, src/utils.jl), and agents are sorted by cell so neighbours sit close in memory.
-- The grid is rebuilt only when agents are added, or every `MAX_STEPS_BETWEEN_GRID_SYNC` steps. Between rebuilds, the neighbour search widens its window by `agg_dist_since_grid_sync`, the distance agents have moved since the last rebuild.
+- The grid is rebuilt only when agents are added, or every `max_steps_between_grid_sync(params)` steps (optional config key `system.max_steps_between_grid_sync`, default 100). Between rebuilds, the neighbour search widens its window by `agg_dist_since_grid_sync`, the distance agents have moved since the last rebuild.
 - Square domains only: non-square Morton indexing is a known `@test_broken`.
 
 **Compact identifiers** (`make_identifier` / `parse_identifier`, src/utils.jl) pack each agent's type, tethered flag, inserting/nascent state and nascent index into one Int for the flat arrays:
@@ -72,11 +73,25 @@ julia --project -e 'include("test/test_forces.jl")'                  # one file 
 
 ## Tests
 
-- `test/setup.jl` loads the package and defines the shared helpers, guarded so it can be included repeatedly. The helpers are: `DEMO_CONFIG`; `test_params(; section=(field=value,)...)`, which builds demo params with fields overridden (immutable structs are edited with `change_field`); `agent_list`, `flat_pos`, `sorted`.
-- There is one test file per source file, with testsets in source order and a header listing the functions covered.
-- Physics tests check invariants only: zeros, saturation, sign, bounds, continuity, Newton's third law, periodic wrap, and "aggregate = sum of pairwise calls". They must not pin exact force-law values, because the functional forms may change.
-- Known bugs are recorded as `@test_broken` and switched to `@test` once fixed.
-- Tests that write output set `system.output_dir` to a `mktempdir()`. The path resolves via `joinpath("out", abs_path)`, so nothing lands in the repo's `out/`.
+Tests check contracts that should survive refactors and changes to the force laws: invariants, conservation, symmetries, and agreement with slow brute-force references. They never pin force values, identifier integers, grid or sort order, or RNG-dependent outcomes such as "N agents after k steps with seed X".
+
+**Tiers** (test/<tier>/):
+- `fast/`: pure functions, components against oracles, biology made deterministic by forcing rates to 0 or effectively infinity, `step!`, and short `run_sim`/sweep runs.
+- `slow/`: statistical rate checks, physical sanity checks (diffusion, relaxation, packing), a long run with an exact area balance, and plot smoke tests.
+- `gpu/`: CPU-vs-GPU agreement. Each backend runs only if its device is present (`Metal.functional()` / `CUDA.functional()`) and otherwise reports a skip. The GPU backends only support `init.method = "random"`.
+
+**Helpers** (test/helpers/, loaded by `setup.jl`):
+- builders.jl: tests describe scenarios and never call agent, grid or flat constructors.
+  - `params_with(; section=(field=value,)...)` builds params from the demo config with overrides, writing output to a `mktempdir()`. `quiet_params` (no biology) and `busy_params` (everything happening fast) are the usual starting points. `single_insertion_params(type)` sets up one prompt insertion.
+  - `build_state(params; OmpA=[pos...], ..., L)` (CPU only) and `random_state(params; OmpA=n, ..., device)` return `(state, params)` through `initialise_sim`.
+  - `run_steps!` and `step_until!` advance a state.
+- consistency.jl: `consistency_errors(state, params)` returns every disagreement between the structs, the flat data and the grid. Use it as `@test consistency_errors(state, params) == String[]`, between whole steps only. It is the one place tests read the flat layout: other tests use its accessors (`flat_radius`, `flat_tether`, `moved_since_rebuild`, `sorted_ix`).
+- oracles.jl: `expected_displacements` / `force_step_matches_oracle` (brute-force all-pairs force step, built from the package's pairwise force functions), `largest_free_disk` (hole search), `disk_area`.
+
+**Conventions:**
+- Use explicit RNGs (`rng=Xoshiro(k)`). Stochastic behaviour is either forced deterministic or tested statistically in slow/.
+- Known bugs are recorded as `@test_broken` and switched to `@test` once fixed. The consistency checker tolerates a few known issues, listed at its top, each with a matching `@test_broken`.
+- Tests that write output use a `mktempdir()` output directory. The path resolves via `joinpath("out", abs_path)`, so nothing lands in the repo's `out/`.
 
 ## Repo conventions
 
