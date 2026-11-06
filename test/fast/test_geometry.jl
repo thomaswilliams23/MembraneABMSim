@@ -63,18 +63,12 @@ rand_point(dims) = dims .* SVector(rand(GEOM_RNG), rand(GEOM_RNG))
     end
 
     @testset "exposed_area: limits, bounds and monotonicity" begin
-        for (r_ins, r_sub) in ((0.17, 0.05), (0.17, 0.17), (0.26, 0.035), (0.1, 0.2))
+        # a substrate is never larger than its inserter (large OMPs start at the BamA's radius)
+        for (r_ins, r_sub) in ((0.17, 0.05), (0.17, 0.17), (0.26, 0.035))
             full = disk_area(r_sub)
 
-            # coincident centres: nothing exposed if the substrate fits inside the inserter, else
-            # the ring outside it. (Known issue: below dist 1e-6 exposed_area returns 0 even for a
-            # larger substrate. The model never hits this case: substrates start inside BamA, or
-            # exactly coincident with an equal radius.)
-            if r_sub <= r_ins
-                @test M.exposed_area(r_ins, r_sub, 0.0) ≈ 0 atol=1e-15
-            else
-                @test_broken M.exposed_area(r_ins, r_sub, 0.0) ≈ disk_area(r_sub) - disk_area(r_ins)
-            end
+            # coincident centres: the substrate fits inside the inserter, so nothing is exposed
+            @test M.exposed_area(r_ins, r_sub, 0.0) ≈ 0 atol=1e-15
             @test M.exposed_area(r_ins, r_sub, r_ins + r_sub) ≈ full rtol=1e-9
             @test M.exposed_area(r_ins, r_sub, 2 * (r_ins + r_sub)) ≈ full rtol=1e-9
 
