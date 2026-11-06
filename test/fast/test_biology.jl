@@ -136,20 +136,18 @@ const LEGAL_LptD = Dict("free" => ("free", "embedding"), "embedding" => ("embedd
         end
     end
 
-    @testset "known issue: a newly tethered agent is frozen on the CPU until the next rebuild" begin
-        # update_tethering_and_assembly! sets the tether point in the structs but not in the flat
-        # data, which the CPU force step uses for the tether constraint. Until the next grid
-        # rebuild the constraint is checked against the stale point (0, 0), so every move is
-        # rejected. (The GPU backends set it on the device.)
+    @testset "a newly tethered agent's flat tether point is set at once, so it can still move" begin
+        # the CPU force step checks the tether constraint against the flat tether point, so it
+        # must be set when the tether forms (not only at the next grid rebuild)
         p = quiet_params(OmpA=(tether_rate=INF_RATE,))
         r_pair = p.OmpA.radius + p.LPS.radius
         state, ps = build_state(p; OmpA=[(0.5, 0.5)], LPS=[(0.5 + r_pair + 0.03, 0.5)], assembled=false)  # the LPS attracts the OmpA
         a = only(state.agents.OMP.OmpA)
         t = run_steps!(state, ps, 1)
         @test a.is_tethered
-        @test_broken flat_tether(state, a) == a.tether_point
+        @test flat_tether(state, a) == a.tether_point
         p0 = a.position
         run_steps!(state, ps, 20; t0=t)
-        @test_broken a.position != p0
+        @test a.position != p0
     end
 end

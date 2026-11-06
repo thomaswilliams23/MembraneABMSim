@@ -12,9 +12,6 @@
 #   - A nascent OMP grows one increment past its final size before promotion, and a promoted
 #     large OMP keeps that radius in the flat data until the next grid rebuild
 #     (test_nascent.jl). Flat radii may exceed the type radius by up to one increment.
-#   - On the CPU, an agent tethered mid-run gets its tether point in the structs but not in the
-#     flat data until the next grid rebuild (test_biology.jl). The flat tether point may still
-#     be the never-tethered value (0, 0).
 
 # ---- flat-layout accessors (the only place tests read AllAgentsFlat / SimGrid directly) ----
 
@@ -105,8 +102,7 @@ function consistency_errors(state::M.SimState, params::M.AllParams; tol::Float64
         if hasproperty(a, :is_tethered)
             id.is_tethered == a.is_tethered || fail("$tag: flat tethered flag $(id.is_tethered) != struct $(a.is_tethered)")
             if a.is_tethered
-                stale_tether_ok = flat_tether(flat, s) == SVector(0.0, 0.0)              # known issue
-                flat_tether(flat, s) == a.tether_point || stale_tether_ok || fail("$tag: flat tether point != struct tether point")
+                flat_tether(flat, s) == a.tether_point || fail("$tag: flat tether point != struct tether point")
                 d = M.shortest_distance(a.position, a.tether_point, dims)
                 d <= tether_radius(params, a) + tol || fail("$tag: $(d) from its tether point, beyond tether radius $(tether_radius(params, a))")
             end
