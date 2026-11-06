@@ -8,10 +8,7 @@
 # This is the one helper that reads the flat-array layout. If the flat representation changes,
 # update the accessors in the first section and the checks below should still apply.
 #
-# Known issues tolerated here (each has a @test_broken that flips when it is fixed):
-#   - A nascent OMP grows one increment past its final size before promotion, and a promoted
-#     large OMP keeps that radius in the flat data until the next grid rebuild
-#     (test_nascent.jl). Flat radii may exceed the type radius by up to one increment.
+# Known issues tolerated here (each has a @test_broken that flips when it is fixed): none.
 
 # ---- flat-layout accessors (the only place tests read AllAgentsFlat / SimGrid directly) ----
 
@@ -60,7 +57,6 @@ function consistency_errors(state::M.SimState, params::M.AllParams; tol::Float64
     dims = gs.dims
     as = all_agents(state)
     N = gs.num_agents
-    max_radius_increment = first(max_growth_increments(params))
 
     # pending updates mean we are mid-step
     gs.num_agents_changed && fail("num_agents_changed is set (grid not rebuilt after insertion)")
@@ -91,8 +87,7 @@ function consistency_errors(state::M.SimState, params::M.AllParams; tol::Float64
         all(0 .<= a.position .< dims) || fail("$tag: position $(a.position) outside domain $dims")
         flat_position(flat, s) == a.position || fail("$tag: flat position $(flat_position(flat, s)) != struct position $(a.position)")
         r_flat, r_expected = flat.effective_radii[s], current_radius(params, a)
-        overshoot_ok = !is_nascent(a) && 0 < r_flat - r_expected <= max_radius_increment + tol   # known issue
-        isapprox(r_flat, r_expected; atol=tol) || overshoot_ok ||
+        isapprox(r_flat, r_expected; atol=tol) ||
             fail("$tag: flat radius $(r_flat) != expected $(r_expected)")
 
         id.type == agent_type(a) || fail("$tag: flat identifier says type $(id.type)")

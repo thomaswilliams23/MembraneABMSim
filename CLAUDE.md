@@ -90,7 +90,7 @@ Tests check contracts that should survive refactors and changes to the force law
 
 **Conventions:**
 - Use explicit RNGs (`rng=Xoshiro(k)`). Stochastic behaviour is either forced deterministic or tested statistically in slow/.
-- Known bugs are recorded as `@test_broken` and switched to `@test` once fixed. The consistency checker tolerates a few known issues, listed at its top, each with a matching `@test_broken`.
+- Known bugs are recorded as `@test_broken` and switched to `@test` once fixed. The consistency checker may tolerate a known issue (listed at its top) while a matching `@test_broken` tracks it.
 - Tests that write output use a `mktempdir()` output directory. The path resolves via `joinpath("out", abs_path)`, so nothing lands in the repo's `out/`.
 
 ## Repo conventions

@@ -74,17 +74,14 @@ end
         @test consistency_errors(state, ps) == String[]
     end
 
-    @testset "known issue: nascent agents overshoot their final size before promotion" begin
-        # A nascent agent grows once in the step it is created and once per step after, but is
-        # only promoted at the start of the step after its insertion time, so it spends one step
-        # one increment past its final size. A promoted large OMP keeps that radius in the flat
-        # data until the next grid rebuild (periodic rebuilds are switched off here, so one can
-        # never coincide with the promotion and hide the issue).
+    @testset "nascent agents never overshoot, and a promoted OMP is exactly its final size" begin
+        # Periodic rebuilds are switched off, so one can never coincide with the promotion and
+        # reset the flat radius by itself.
         p = single_insertion_params("LptD"; system=(max_steps_between_grid_sync=10^6,))
         state, ps = build_state(p; BamA=[(0.5, 0.5)], num_PP=1)
         tr = track_one_insertion(state, ps)
-        @test_broken maximum(tr.dists) <= ps.BamA.radius + ps.LptD.radius + 1e-12
-        @test_broken maximum(tr.radii) <= ps.LptD.radius + 1e-12
-        @test_broken flat_radius(state, tr.promoted) == ps.LptD.radius
+        @test maximum(tr.dists) <= ps.BamA.radius + ps.LptD.radius + 1e-12
+        @test maximum(tr.radii) <= ps.LptD.radius + 1e-12
+        @test flat_radius(state, tr.promoted) == ps.LptD.radius
     end
 end
