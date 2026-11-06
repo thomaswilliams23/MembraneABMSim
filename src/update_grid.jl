@@ -380,3 +380,33 @@ function membrane_contains_hole(agents::AllAgents, grid_size::GridSize, params::
 
     return false
 end
+
+
+
+"""
+    sync_grid!(state::SimState, params::AllParams)
+
+Rebuilds the grid and flat data structures from the agent structs (copying data back from and
+then onto the GPU if needed), checks for membrane holes to decide whether growth is allowed,
+and resets the steps-since-sync counter.
+"""
+function sync_grid!(state::SimState, params::AllParams)
+
+    #if using a GPU, copy data back to CPU to rebuild grid
+    copy_to_host!(state)
+
+    #rebuild grid and flat data structures
+    rebuild_grid!(state.grid_size, state.grid, state.agents, params.force.sensing_radius)
+    compile_flat_system_data_cpu!(state.flat, state.agents, state.grid_size, state.grid, params)
+    put_grid_in_sorted_order!(state.grid_size, state.grid, state.flat)
+
+    #if using a GPU, copy data to GPU
+    copy_to_device!(state)
+
+    state.grid_size.num_agents_changed = false
+
+    #check for membrane holes (if a max hole radius is specified) and block growth if so
+    state.allow_membrane_growth = !membrane_contains_hole(state.agents, state.grid_size, params)
+
+    state.steps_since_grid_sync = 0
+end

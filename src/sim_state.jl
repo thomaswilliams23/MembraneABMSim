@@ -1,79 +1,3 @@
-#
-# Run state for a simulation, plus the per-device operations used by `step!` (main.jl).
-#
-# Each backend (CPU, Metal, CUDA) gets its own type, and the device-specific parts of a step
-# are dispatched on it rather than branched on a device string. The CPU methods are no-ops
-# or call the CPU code directly; the GPU methods wrap the existing Metal/CUDA functions.
-#
-
-"""
-    AbstractSimBackend
-
-Supertype for the compute backend a simulation runs on (`SimBackendCPU`, `SimBackendMetal`, `SimBackendCUDA`).
-"""
-abstract type AbstractSimBackend end
-
-"""
-    SimBackendCPU <: AbstractSimBackend
-
-CPU backend. Holds no extra data: the CPU uses `SimState.flat` directly.
-"""
-struct SimBackendCPU <: AbstractSimBackend end
-
-"""
-    SimBackendMetal <: AbstractSimBackend
-
-Metal GPU backend: the compiled kernels, the device-side data, and Float32 copies of the nascent increments.
-"""
-struct SimBackendMetal{FK, NK} <: AbstractSimBackend
-    force_kernel::FK
-    non_force_position_kernel::NK
-    all_data::AllDataMetal
-    grid_size_dev::GridSizeMetal
-    params_dev::ParamsMetal
-    effective_rad_incs::SVector{7, Float32}
-    ideal_dist_incs::SVector{7, Float32}
-end
-
-"""
-    SimBackendCUDA <: AbstractSimBackend
-
-CUDA GPU backend: the compiled kernels, the device-side data, and Float32 copies of the nascent increments.
-"""
-struct SimBackendCUDA{FK, NK} <: AbstractSimBackend
-    force_kernel::FK
-    non_force_position_kernel::NK
-    all_data::AllDataCUDA
-    grid_size_dev::GridSizeCUDA
-    params_dev::ParamsCUDA
-    effective_rad_incs::SVector{7, Float32}
-    ideal_dist_incs::SVector{7, Float32}
-end
-
-
-"""
-    SimState{B<:AbstractSimBackend}
-
-Everything that changes or is carried between steps of a simulation: the agents (struct and flat
-representations), the spatial grid, the backend, the precomputed nascent lookups, growth and
-grid-sync bookkeeping, and the random number generator.
-"""
-mutable struct SimState{B<:AbstractSimBackend, R<:AbstractRNG}
-    agents::AllAgents
-    grid_size::GridSize
-    grid::SimGrid
-    flat::AllAgentsFlat
-    backend::B
-    nascent_added_area_lookup::NascentAddedAreaLookup
-    effective_rad_incs::SVector{7, Float64}
-    ideal_dist_incs::SVector{7, Float64}
-    allow_membrane_growth::Bool
-    steps_since_grid_sync::Int
-    max_steps_between_grid_sync::Int
-    rng::R
-end
-
-
 """
     resolve_device(params::AllParams; suppress_prints::Bool=false)
 
@@ -175,10 +99,6 @@ function initialise_sim(params::AllParams; rng::AbstractRNG=Random.default_rng()
     )
 end
 
-
-# ---------------------------------------------------------------------------------------------
-# Backend operations used by `step!`
-# ---------------------------------------------------------------------------------------------
 
 """
     copy_to_host!(state::SimState)

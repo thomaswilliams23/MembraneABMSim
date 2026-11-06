@@ -32,13 +32,13 @@ julia --project -e 'include("test/test_forces.jl")'                  # one file 
 
 ## Architecture
 
-**Simulation loop** (`run_sim` and `step!`, src/main.jl; `SimState`, src/sim_state.jl):
+**Simulation loop** (`run_sim` and `step!`, src/main.jl; `initialise_sim` and the per-backend step operations, src/sim_state.jl; `SimState`, src/types/SystemTypes.jl; backend types, src/types/BackendTypes.jl):
 1. Parse the JSON config into `AllParams` (src/types/ParamTypes.jl, via JSON3/StructTypes).
 2. `initialise_sim` precomputes the nascent-insertion lookup tables (`build_nascent_added_area_lookup`, `compute_nascent_incs`), initialises the system (random / specify_positions / from_checkpoint) and returns a `SimState`. The state holds the agents, the grid, the backend (`SimBackendCPU` / `SimBackendMetal` / `SimBackendCUDA`) and the `rng`.
 3. `run_sim` calls `step!(state, params, t)` once per step and writes output every `vis_dt`. Device-specific work inside a step is dispatched on the backend type (`copy_to_host!`, `apply_growth_and_nonforce!`, `advance_positions!`, ...), not branched on a device string.
 4. Each step (`step!`):
    - Update the BAM and Lpt insertion subsystems (src/biology.jl).
-   - Rebuild the grid if the agent count changed.
+   - Rebuild the grid if the agent count changed (`sync_grid!`, src/update_grid.jl).
    - Update tethering and assembly, then grow the nascent agents (src/nascent.jl).
    - Rescale the domain by the area those insertions added (src/update_grid.jl).
    - Apply diffusion and forces.
