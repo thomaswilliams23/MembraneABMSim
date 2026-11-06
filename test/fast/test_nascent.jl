@@ -38,6 +38,12 @@ end
         end
     end
 
+    @testset "growth increments are all finite and non-negative (no uninitialised entries)" begin
+        for rad_or_dist in M.compute_nascent_incs(params_with())
+            @test all(x -> isfinite(x) && x >= 0, rad_or_dist)
+        end
+    end
+
     @testset "a nascent $type grows steadily and is promoted" for type in OMP_TYPES
         p = single_insertion_params(type)
         state, ps = build_state(p; BamA=[(0.5, 0.5)], LPS=[(0.1, 0.1)], num_PP=1)

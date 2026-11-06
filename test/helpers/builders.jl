@@ -241,14 +241,10 @@ area(state::M.SimState) = prod(state.grid_size.dims)
 "rescale the domain (and every position) by `s`, as domain growth does"
 scale_domain!(state::M.SimState, s::Real) = M.apply_scale_factor!(state.agents, state.flat, state.grid_size, Float64(s))
 
-# compute_nascent_incs returns growth increments indexed by agent type number (OmpA 1, LPS 2,
-# OmpCF 3, BamA 5, LptD 7). Slots 4 and 6 are unused and not initialised, so never read them.
-const INCREMENT_SLOTS = (1, 2, 3, 5, 7)
-
 "largest per-step growth increments of any nascent type: (effective radius, ideal distance)"
 function max_growth_increments(params::M.AllParams)
     rad_incs, dist_incs = M.compute_nascent_incs(params)
-    return maximum(rad_incs[i] for i in INCREMENT_SLOTS), maximum(dist_incs[i] for i in INCREMENT_SLOTS)
+    return maximum(rad_incs), maximum(dist_incs)
 end
 
 

@@ -49,19 +49,12 @@ const F32_POS_TOL = 10 * eps(Float32)
 
             @testset "a freshly initialised state has no pending rebuild" begin
                 _, (gpu, _) = twin_states(quiet_params(), backend; OmpA=2, LPS=20)
-                if backend == "metal"
-                    # known issue: the Metal random initialisation does not clear num_agents_changed
-                    # (the CPU and CUDA versions do), so the first step does a redundant rebuild
-                    @test_broken !gpu.grid_size.num_agents_changed
-                else
-                    @test !gpu.grid_size.num_agents_changed
-                end
+                @test !gpu.grid_size.num_agents_changed
             end
 
             @testset "copies to the device and back are unchanged" begin
                 (cpu, ps), (gpu, _) = twin_states(quiet_params(), backend; OmpA=3, OmpCF=2, LptD=1, BamA=2, LPS=60)
                 @test gpu.backend isa M.AbstractSimBackend && !(gpu.backend isa M.SimBackendCPU)
-                M.sync_grid!(gpu, ps)                        # (clears the Metal flag above)
                 for _ in 1:2
                     M.copy_to_device!(gpu)
                     M.copy_to_host!(gpu)

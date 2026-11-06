@@ -56,6 +56,7 @@ metric(f, state, params) = f(state.agents, state.grid_size.dims, params)
         gaps = metric(M.get_distance_between_BAMs, state, ps)
         @test gaps[1, 2] ≈ 0.8 - 2rB              # 0.8 apart the short way round
         @test gaps[1, 2] == gaps[2, 1]
+        @test gaps[1, 1] == gaps[2, 2] == 0
         @test metric(M.get_BAM_stalled_status, state, ps) == [false, true]   # only the first can reach an LPS
         counts = metric(M.get_num_new_and_old_LPS_in_sensing_radius, state, ps)
         @test counts[1]["old"] == 1 && counts[1]["new"] == 0 && counts[2]["old"] == 0
