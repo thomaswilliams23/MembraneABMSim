@@ -13,7 +13,7 @@ function resolve_forces_metal!(force_kernel, all_data_metal::AllDataMetal, grid_
 
     #some calculations needed for kernel
     max_effective_radius = Float32(max(params_metal.OmpA_radius, params_metal.OmpCF_radius, params_metal.LptD_radius, params_metal.BamA_radius, params_metal.LPS_radius))
-    max_agg_dist = maximum(all_data_metal.agg_dist_since_grid_sync)
+    max_agg_dist = maximum(view(all_data_metal.agg_dist_since_grid_sync, 1:grid_size_metal.num_agents))
 
     #run the force kernel
     force_kernel(
