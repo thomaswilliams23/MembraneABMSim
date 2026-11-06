@@ -57,15 +57,13 @@ end
     end
 
     @testset "growth between rebuilds keeps agents within the search window" begin
-        # Known issue: apply_scale_factor! dilates positions and cells but not the distance each
-        # agent has moved since the last rebuild, which the neighbour search uses as its margin.
-        # After growth an agent can sit further (in cell widths) from its recorded cell than the
-        # margin allows. The effect is tiny at real growth rates but exact in principle.
+        # growth dilates positions and cells, so each agent's offset from its recorded cell grows
+        # too: the neighbour search's margin (distance moved since the last rebuild) must keep up
         p = quiet_params(system=(max_steps_between_grid_sync=10^6,))
         state, ps = random_state(p; OmpA=3, OmpCF=2, LptD=1, BamA=1, LPS=120, L=1.0, rng=Xoshiro(6))
         run_steps!(state, ps, 300)                     # drift away from the recorded cells
         scale_domain!(state, 1.3)
-        @test_broken consistency_errors(state, ps) == String[]
+        @test consistency_errors(state, ps) == String[]
     end
 
     @testset "periodic rebuild interval is respected" begin
