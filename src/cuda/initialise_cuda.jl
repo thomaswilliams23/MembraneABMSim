@@ -4,7 +4,7 @@
 Initialises the simulation system using the CUDA GPU backend. Includes additional data 
 structures necessary for running the simulation with a GPU.
 """
-function initialise_system_CUDA(params::AllParams; clear_existing_output::Bool=false, suppress_prints::Bool=false)
+function initialise_system_CUDA(params::AllParams; clear_existing_output::Bool=false, suppress_prints::Bool=false, rng::AbstractRNG=Random.default_rng())
 
     #build the kernels
     non_force_position_kernel = _non_force_position_kernel_CUDA!(CUDABackend())
@@ -26,7 +26,7 @@ function initialise_system_CUDA(params::AllParams; clear_existing_output::Bool=f
             all_data_CUDA,
             grid_size_CUDA,
             params_CUDA
-        ) = initialise_system_random_CUDA(force_kernel, params; suppress_prints=suppress_prints)
+        ) = initialise_system_random_CUDA(force_kernel, params; suppress_prints=suppress_prints, rng=rng)
     else
         #TODO: implement other initialisation methods?
         error("Initialisation type $(params.init.method) not recognised for this device.")
@@ -50,7 +50,7 @@ function run_equilibration_CUDA!(agents::AllAgents, grid_size::GridSize, grid::S
 
     #run equilibration
     steps_since_grid_sync = 0
-    MAX_STEPS_BETWEEN_GRID_SYNC = 100 #TODO: make adaptive? calibrate?
+    MAX_STEPS_BETWEEN_GRID_SYNC = max_steps_between_grid_sync(params)
     t = 0.0
     time_err = 0.1 * params.system.dt
     while t < equilibration_time - time_err
@@ -182,11 +182,11 @@ end
 
 Initialises agents randomly within the domain and runs equilibration using CUDA GPU backend.
 """
-function initialise_system_random_CUDA(force_kernel, params::AllParams; suppress_prints::Bool=false)
+function initialise_system_random_CUDA(force_kernel, params::AllParams; suppress_prints::Bool=false, rng::AbstractRNG=Random.default_rng())
     #initialise as per CPU version
     grid_size, grid = initialise_grid(params)
     system_flat_cpu = initialise_flat_cpu(params)
-    agents = initialise_agents_random(grid_size, params)
+    agents = initialise_agents_random(grid_size, params; rng=rng)
 
     #initialise CPU-bound CUDA data
     grid_size_CUDA, params_CUDA = initialise_CPU_CUDA_data(grid_size, params)

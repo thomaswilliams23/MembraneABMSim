@@ -63,6 +63,7 @@ function compute_non_force_position_changes_CUDA!(
         all_data_CUDA.effective_radii,
         all_data_CUDA.identifiers,
         all_data_CUDA.tether_points,
+        all_data_CUDA.agg_dist_since_grid_sync,
         all_data_CUDA.substrate_inserting_ideal_dists,
         all_data_CUDA.newly_tethered_agent_ixs,
         grid_size_CUDA.dims,
@@ -89,6 +90,7 @@ end
         effective_radii::CuDeviceVector{Float32},
         identifiers::CuDeviceVector{Int},
         tether_points::CuDeviceVector{Float32},
+        agg_dist_since_grid_sync::CuDeviceVector{Float32},
         substrate_inserting_ideal_dists::CuDeviceVector{Float32},
         newly_tethered_agent_ixs::CuDeviceVector{Int},
         dims::SVector{2, Float32},
@@ -106,6 +108,7 @@ CUDA GPU kernel for computing non-force position changes.
     effective_radii::CuDeviceVector{Float32},
     identifiers::CuDeviceVector{Int},
     tether_points::CuDeviceVector{Float32},
+    agg_dist_since_grid_sync::CuDeviceVector{Float32},
     substrate_inserting_ideal_dists::CuDeviceVector{Float32},
     newly_tethered_agent_ixs::CuDeviceVector{Int},
     dims::SVector{2, Float32},
@@ -162,6 +165,8 @@ CUDA GPU kernel for computing non-force position changes.
             tether_points[2*sorted_ix-1] = new_tether_pos[1]
             tether_points[2*sorted_ix] = new_tether_pos[2]
         end
+        # offsets from the (rescaled) grid cells scale too, so scale the neighbour-search margin with them
+        agg_dist_since_grid_sync[sorted_ix] *= scale_factor
     end
 
 end

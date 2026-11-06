@@ -29,3 +29,25 @@ struct NascentAddedAreaLookup
     LptD::Vector{Float64}
     LPS::Vector{Float64}
 end
+
+"""
+    SimState{B<:AbstractSimBackend, R<:AbstractRNG}
+
+Everything that changes or is carried between steps of a simulation: the agents (struct and flat
+representations), the spatial grid, the backend, the precomputed nascent lookups, growth and
+grid-sync bookkeeping, and the random number generator.
+"""
+mutable struct SimState{B<:AbstractSimBackend, R<:AbstractRNG}
+    agents::AllAgents
+    grid_size::GridSize
+    grid::SimGrid
+    flat::AllAgentsFlat
+    backend::B
+    nascent_added_area_lookup::NascentAddedAreaLookup
+    effective_rad_incs::SVector{7, Float64}
+    ideal_dist_incs::SVector{7, Float64}
+    allow_membrane_growth::Bool
+    steps_since_grid_sync::Int
+    max_steps_between_grid_sync::Int
+    rng::R
+end

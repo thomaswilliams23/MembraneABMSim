@@ -4,7 +4,7 @@
 Initialises the simulation system using the Metal GPU backend. Includes additional data 
 structures necessary for running the simulation with a GPU.
 """
-function initialise_system_metal(params::AllParams; clear_existing_output::Bool=false, suppress_prints::Bool=false)
+function initialise_system_metal(params::AllParams; clear_existing_output::Bool=false, suppress_prints::Bool=false, rng::AbstractRNG=Random.default_rng())
 
     #build the kernels
     non_force_position_kernel = _non_force_position_kernel_metal!(MetalBackend())
@@ -26,7 +26,7 @@ function initialise_system_metal(params::AllParams; clear_existing_output::Bool=
             all_data_metal,
             grid_size_metal,
             params_metal
-        ) = initialise_system_random_metal(force_kernel, params; suppress_prints=suppress_prints)
+        ) = initialise_system_random_metal(force_kernel, params; suppress_prints=suppress_prints, rng=rng)
     else
         #TODO: implement other initialisation methods?
         error("Initialisation type $(params.init.method) not recognised.")
@@ -52,7 +52,7 @@ function run_equilibration_metal!(agents::AllAgents, grid_size::GridSize, grid::
 
     #run equilibration
     steps_since_grid_sync = 0
-    MAX_STEPS_BETWEEN_GRID_SYNC = 100 #TODO: make adaptive? calibrate?
+    MAX_STEPS_BETWEEN_GRID_SYNC = max_steps_between_grid_sync(params)
     t = 0.0
     time_err = 0.1 * params.system.dt
     while t < equilibration_time - time_err
@@ -179,12 +179,12 @@ end
 
 Initialises agents randomly within the domain and runs equilibration using Metal GPU backend.
 """
-function initialise_system_random_metal(force_kernel, params::AllParams; suppress_prints::Bool=false)
+function initialise_system_random_metal(force_kernel, params::AllParams; suppress_prints::Bool=false, rng::AbstractRNG=Random.default_rng())
 
     #initialise as per CPU version
     grid_size, grid = initialise_grid(params)
     system_flat_cpu = initialise_flat_cpu(params)
-    agents = initialise_agents_random(grid_size, params)
+    agents = initialise_agents_random(grid_size, params; rng=rng)
 
     #initialise CPU-bound metal data
     grid_size_metal, params_metal = initialise_CPU_metal_data(grid_size, params)
@@ -196,6 +196,7 @@ function initialise_system_random_metal(force_kernel, params::AllParams; suppres
     rebuild_grid!(grid_size, grid, agents, params.force.sensing_radius)
     compile_flat_system_data_cpu!(system_flat_cpu, agents, grid_size, grid, params)
     put_grid_in_sorted_order!(grid_size, grid, system_flat_cpu)
+    grid_size.num_agents_changed = false
 
     #copy data to metal GPU
     copy_data_to_metal!(all_data_metal, grid_size_metal, system_flat_cpu, grid_size, grid)

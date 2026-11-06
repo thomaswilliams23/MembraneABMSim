@@ -20,73 +20,8 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false, sup
         Random.seed!(params.system.seed)
     end
 
-    #determine device to use
-    device = "cpu"
-    if params.system.device == "metal"
-        @assert Metal.functional() "Metal device specified but no Metal-compatible GPU found."
-        if !suppress_prints
-            println("Running on Metal GPU")
-        end
-        device = "metal"
-    elseif params.system.device == "cuda"
-        @assert CUDA.has_cuda() "CUDA device specified but no CUDA-compatible GPU found."
-        if !suppress_prints
-            println("Running on CUDA GPU")
-        end
-        device = "cuda"
-    elseif params.system.device == "cpu"
-        if !suppress_prints
-            println("Running on CPU")
-        end
-        device = "cpu"
-    else
-        if !isnothing(params.system.device)
-            error("Device type $(params.system.device) not recognised")
-        end
-    end
-
-    #build nascent lookups for speed
-    nascent_added_area_lookup = build_nascent_added_area_lookup(params)
-    effective_rad_incs, ideal_dist_incs = compute_nascent_incs(params)
-
-
-    #intialise the system (device-specific)
-    if device=="cpu"
-        (
-            agents, 
-            grid_size, 
-            grid, 
-            system_flat_cpu
-        ) = initialise_system_cpu(params; clear_existing_output=clear_existing_output, suppress_prints=suppress_prints)
-    elseif device=="metal"
-        (
-            non_force_position_kernel,
-            force_kernel, 
-            agents, 
-            grid_size, 
-            grid, 
-            system_flat_cpu, 
-            all_data_metal, 
-            grid_size_metal, 
-            params_metal
-        ) = initialise_system_metal(params; clear_existing_output=clear_existing_output, suppress_prints=suppress_prints)
-        effective_rad_incs_metal = Float32.(effective_rad_incs)
-        ideal_dist_incs_metal = Float32.(ideal_dist_incs)
-    elseif device=="cuda"
-        (
-            non_force_position_kernel,
-            force_kernel, 
-            agents, 
-            grid_size, 
-            grid, 
-            system_flat_cpu, 
-            all_data_CUDA, 
-            grid_size_CUDA, 
-            params_CUDA
-        ) = initialise_system_CUDA(params; clear_existing_output=clear_existing_output, suppress_prints=suppress_prints)
-        effective_rad_incs_CUDA = Float32.(effective_rad_incs)
-        ideal_dist_incs_CUDA = Float32.(ideal_dist_incs)
-    end
+    #initialise the system (device-specific) - uses the global RNG, so a seeded run is reproducible
+    state = initialise_sim(params; rng=Random.default_rng(), clear_existing_output=clear_existing_output, suppress_prints=suppress_prints)
 
     #add a copy of the config to the output directory
     copy_config_to_output_dir(config_pathname, params.system.output_dir)
@@ -98,185 +33,21 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false, sup
     #write out initial state
     output_ix_interval = round(Int, params.system.vis_dt/params.system.dt)
     init_output_ix = round(Int, time_ix_offset/output_ix_interval)
-    write_system_state(agents, grid_size.dims, params.system.output_dir, init_output_ix)
-
-    #only permit the membrane to grow if no holes are present
-    #we check for holes at every grid sync
-    allow_membrane_growth = true
+    write_system_state(state.agents, state.grid_size.dims, params.system.output_dir, init_output_ix)
 
 
     #main loop
-    steps_since_grid_sync = 0
-    MAX_STEPS_BETWEEN_GRID_SYNC = 100 #TODO: make adaptive? calibrate?
     max_time_ix = round(Int, params.system.t_max/params.system.dt)
     for time_ix in (1:max_time_ix) .+ time_ix_offset
 
         t = time_ix * params.system.dt
 
-        #update BAM subsystem
-        update_BAM_subsystem!(agents, grid_size, grid, system_flat_cpu, params, t)
-
-        #update Lpt subsystem
-        update_Lpt_subsystem!(agents, grid_size, system_flat_cpu, params, t)
-
-        #if we added new agents, need to update grid and flat data structure
-        if grid_size.num_agents_changed
-
-            #if using a GPU, copy data back to CPU to rebuild grid
-            if device=="metal"
-                copy_data_to_cpu_from_metal!(system_flat_cpu, agents, all_data_metal, grid_size_metal)
-            elseif device=="cuda"
-                copy_data_to_cpu_from_CUDA!(system_flat_cpu, agents, all_data_CUDA, grid_size_CUDA)
-            end
-
-            #rebuild grid and flat data structures
-            rebuild_grid!(grid_size, grid, agents, params.force.sensing_radius)
-            compile_flat_system_data_cpu!(system_flat_cpu, agents, grid_size, grid, params)
-            put_grid_in_sorted_order!(grid_size, grid, system_flat_cpu)
-
-            #if using a GPU, copy data to GPU
-            if device=="metal"
-                copy_data_to_metal!(all_data_metal, grid_size_metal, system_flat_cpu, grid_size, grid)
-            elseif device=="cuda"
-                copy_data_to_CUDA!(all_data_CUDA, grid_size_CUDA, system_flat_cpu, grid_size, grid)
-            end
-
-            grid_size.num_agents_changed = false
-
-            #check for membrane holes (if a max hole radius is specified) and block growth if so
-            if membrane_contains_hole(agents, grid_size, params)
-                allow_membrane_growth = false
-            else
-                allow_membrane_growth = true
-            end
-
-            steps_since_grid_sync = 0
-        end
-
-        #if any nascent agents have been promoted, need to update flat data structure and pass to gpu
-        if grid_size.nascent_promoted
-
-            update_flat_data_nascent_agents!(agents, system_flat_cpu)
-
-            #if using a GPU, update nascent agent info on the GPU
-            if device=="metal"
-                update_nascent_promotion_metal!(all_data_metal, system_flat_cpu, grid_size)
-            elseif device=="cuda"
-                update_nascent_promotion_CUDA!(all_data_CUDA, system_flat_cpu, grid_size)
-            end
-
-            grid_size.nascent_promoted = false
-        end
-
-
-        #check for any new tethering or assembly
-        newly_tethered_agent_ixs = update_tethering_and_assembly!(agents, system_flat_cpu, params)
-
-        #if using a GPU, update newly tethered agent ixs on the GPU
-        if device=="metal" && length(newly_tethered_agent_ixs)>0
-            update_newly_tethered_agent_ixs_metal!(all_data_metal, newly_tethered_agent_ixs)
-        elseif device=="cuda" && length(newly_tethered_agent_ixs)>0
-            update_newly_tethered_agent_ixs_CUDA!(all_data_CUDA, newly_tethered_agent_ixs)
-        end
-
-        #update any nascent agents
-        update_nascent_agents!(agents, system_flat_cpu, effective_rad_incs, ideal_dist_incs)
-
-        #adjust membrane area if allowed - note that GPU kernels need to be called regardless, as they also update nascent agents and tethering states
-        if device=="cpu"
-            if allow_membrane_growth
-                rescale_domain!(agents, system_flat_cpu, grid_size, params, nascent_added_area_lookup, t)
-            end
-        elseif device=="metal"
-            compute_non_force_position_changes_metal!(
-                non_force_position_kernel, 
-                agents, 
-                all_data_metal, 
-                grid_size, 
-                grid_size_metal, 
-                effective_rad_incs_metal, 
-                ideal_dist_incs_metal, 
-                nascent_added_area_lookup, 
-                newly_tethered_agent_ixs, 
-                params, 
-                t,
-                allow_membrane_growth=allow_membrane_growth
-            )
-        elseif device=="cuda"
-            compute_non_force_position_changes_CUDA!(
-                non_force_position_kernel, 
-                agents, 
-                all_data_CUDA, 
-                grid_size, 
-                grid_size_CUDA, 
-                effective_rad_incs_CUDA, 
-                ideal_dist_incs_CUDA, 
-                nascent_added_area_lookup, 
-                newly_tethered_agent_ixs, 
-                params, 
-                t,
-                allow_membrane_growth=allow_membrane_growth
-            )
-        end
-
-
-        #if it has been too long since last grid sync, rebuild grid and flat data structures
-        if steps_since_grid_sync >= MAX_STEPS_BETWEEN_GRID_SYNC
-
-            #if using a GPU, copy its data back to CPU to rebuild grid
-            if device=="metal"
-                copy_data_to_cpu_from_metal!(system_flat_cpu, agents, all_data_metal, grid_size_metal)
-            elseif device=="cuda"
-                copy_data_to_cpu_from_CUDA!(system_flat_cpu, agents, all_data_CUDA, grid_size_CUDA)
-            end
-
-            #rebuild grid and flat data structures
-            rebuild_grid!(grid_size, grid, agents, params.force.sensing_radius)
-            compile_flat_system_data_cpu!(system_flat_cpu, agents, grid_size, grid, params)
-            put_grid_in_sorted_order!(grid_size, grid, system_flat_cpu)
-
-            #if using a GPU, copy data to GPU
-            if device=="metal"
-                copy_data_to_metal!(all_data_metal, grid_size_metal, system_flat_cpu, grid_size, grid)
-            elseif device=="cuda"
-                copy_data_to_CUDA!(all_data_CUDA, grid_size_CUDA, system_flat_cpu, grid_size, grid)
-            end
-
-            #check for membrane holes (if a max hole radius is specified) and block growth if so
-            if membrane_contains_hole(agents, grid_size, params)
-                allow_membrane_growth = false
-            else
-                allow_membrane_growth = true
-            end
-
-            steps_since_grid_sync = 0
-        else
-            steps_since_grid_sync += 1
-        end
-
-
-        #resolve inter-agent forces and diffusion
-        if device=="cpu"
-            compute_diffusion!(agents, system_flat_cpu, grid_size, params)
-            resolve_forces_cpu!(agents, grid_size, grid, system_flat_cpu, params)
-        elseif device=="metal"
-            resolve_forces_metal!(force_kernel, all_data_metal, grid_size_metal, params_metal)
-            copy_data_to_cpu = copy_data_to_cpu_yn(agents.OMP.BamA, params, t)
-            if copy_data_to_cpu
-                copy_data_to_cpu_from_metal!(system_flat_cpu, agents, all_data_metal, grid_size_metal)
-            end
-        elseif device=="cuda"
-            resolve_forces_CUDA!(force_kernel, all_data_CUDA, grid_size_CUDA, params_CUDA)
-            copy_data_to_cpu = copy_data_to_cpu_yn(agents.OMP.BamA, params, t)
-            if copy_data_to_cpu
-                copy_data_to_cpu_from_CUDA!(system_flat_cpu, agents, all_data_CUDA, grid_size_CUDA)
-            end
-        end
+        step!(state, params, t)
 
         #optionally write out data
         if mod(time_ix, output_ix_interval) == 0
             output_ix = round(Int, time_ix/output_ix_interval)
-            write_system_state(agents, grid_size.dims, params.system.output_dir, output_ix)
+            write_system_state(state.agents, state.grid_size.dims, params.system.output_dir, output_ix)
 
             if !suppress_prints
                 @printf "Running: t=%5.2f\r" t
@@ -288,6 +59,62 @@ function run_sim(config_pathname::String; clear_existing_output::Bool=false, sup
         println("\nSimulation complete.")
     end
     return
+end
+
+
+
+"""
+    step!(state::SimState, params::AllParams, t::Float64)
+
+Advances the simulation by one time step, ending at time `t`:
+1. update the BAM and Lpt insertion subsystems,
+2. rebuild the grid if agents were added, and pass nascent promotions to the device,
+3. update tethering and assembly, then grow the nascent agents,
+4. rescale the domain by the area added (plus the GPU's other non-force updates),
+5. rebuild the grid if it has been too long since the last rebuild,
+6. apply diffusion and resolve forces.
+"""
+function step!(state::SimState, params::AllParams, t::Float64)
+
+    #update BAM subsystem
+    update_BAM_subsystem!(state.agents, state.grid_size, state.grid, state.flat, params, t; rng=state.rng)
+
+    #update Lpt subsystem
+    update_Lpt_subsystem!(state.agents, state.grid_size, state.flat, params, t; rng=state.rng)
+
+    #if we added new agents, need to update grid and flat data structure
+    if state.grid_size.num_agents_changed
+        sync_grid!(state, params)
+    end
+
+    #if any nascent agents have been promoted, need to update flat data structure and pass to gpu
+    if state.grid_size.nascent_promoted
+        update_flat_data_nascent_agents!(state.agents, state.flat)
+        push_nascent_promotion!(state)
+        state.grid_size.nascent_promoted = false
+    end
+
+    #check for any new tethering or assembly, and pass to gpu
+    newly_tethered_agent_ixs = update_tethering_and_assembly!(state.agents, state.flat, params; rng=state.rng)
+    push_newly_tethered!(state, newly_tethered_agent_ixs)
+
+    #update any nascent agents
+    update_nascent_agents!(state.agents, state.flat, state.effective_rad_incs, state.ideal_dist_incs)
+
+    #adjust membrane area if allowed - note that GPU kernels need to be called regardless, as they also update nascent agents and tethering states
+    apply_growth_and_nonforce!(state, params, t, newly_tethered_agent_ixs)
+
+    #if it has been too long since last grid sync, rebuild grid and flat data structures
+    if state.steps_since_grid_sync >= state.max_steps_between_grid_sync
+        sync_grid!(state, params)
+    else
+        state.steps_since_grid_sync += 1
+    end
+
+    #resolve inter-agent forces and diffusion
+    advance_positions!(state, params, t)
+
+    return state
 end
 
 
