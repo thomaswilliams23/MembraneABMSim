@@ -47,6 +47,7 @@ module MembraneABMSim
     include("initialise.jl")
     include("file_io.jl")
     include("forces.jl")
+    include("sim_state.jl")
     include("main.jl")
     include("nascent.jl")
     include("non_spatial_control.jl")

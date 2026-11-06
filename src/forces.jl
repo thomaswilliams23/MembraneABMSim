@@ -562,7 +562,7 @@ end
 Computes the position of all agents following one time step of diffusion. If a proposal move
 takes an agent beyond the tether radius of its tether point, the move is rejected.
 """
-function compute_diffusion!(agents::AllAgents, system_flat::AllAgentsFlat, grid_size::GridSize, params::AllParams)
+function compute_diffusion!(agents::AllAgents, system_flat::AllAgentsFlat, grid_size::GridSize, params::AllParams; rng::AbstractRNG=Random.default_rng())
 
     #return early if diffusion temperature is too low or diffusion is turned off
     temp_err = 1e-8
@@ -575,7 +575,7 @@ function compute_diffusion!(agents::AllAgents, system_flat::AllAgentsFlat, grid_
     diff_cov_LPS = 2*diff_coeff_LPS*params.system.dt*Matrix(I, 2, 2)
     LPS_displacement_dist = MvNormal(SVector{2, Float64}(0.0, 0.0), diff_cov_LPS)
     for LPS in agents.LPS
-        displacement = rand(LPS_displacement_dist)
+        displacement = rand(rng, LPS_displacement_dist)
         proposal_dest = mod.(LPS.position + displacement, grid_size.dims)
         LPS.position = proposal_dest
         #put in flat structure too
@@ -585,7 +585,7 @@ function compute_diffusion!(agents::AllAgents, system_flat::AllAgentsFlat, grid_
         system_flat.agg_dist_since_grid_sync[sorted_ix] += norm(displacement)
     end
     for nascent_LPS in agents.nascent.nascent_LPS
-        displacement = rand(LPS_displacement_dist)
+        displacement = rand(rng, LPS_displacement_dist)
         proposal_dest = mod.(nascent_LPS.position + displacement, grid_size.dims)
         nascent_LPS.position = proposal_dest
         #put in flat structure too
@@ -624,7 +624,7 @@ function compute_diffusion!(agents::AllAgents, system_flat::AllAgentsFlat, grid_
     LptD_displacement_dist = MvNormal(SVector{2, Float64}(0.0, 0.0), diff_cov_LptD)
 
     for OmpA in agents.OMP.OmpA
-        displacement = rand(OmpA_displacement_dist)
+        displacement = rand(rng, OmpA_displacement_dist)
         proposal_dest = mod.(OmpA.position + displacement, grid_size.dims)
         if OmpA.is_tethered
             if shortest_distance(proposal_dest, OmpA.tether_point, grid_size.dims)>params.OmpA.tether_radius
@@ -639,7 +639,7 @@ function compute_diffusion!(agents::AllAgents, system_flat::AllAgentsFlat, grid_
         system_flat.agg_dist_since_grid_sync[sorted_ix] += norm(displacement)
     end
     for OmpCF in agents.OMP.OmpCF
-        displacement = rand(OmpCF_displacement_dist)
+        displacement = rand(rng, OmpCF_displacement_dist)
         proposal_dest = mod.(OmpCF.position + displacement, grid_size.dims)
         OmpCF.position = proposal_dest
         #put in flat structure too
@@ -649,7 +649,7 @@ function compute_diffusion!(agents::AllAgents, system_flat::AllAgentsFlat, grid_
         system_flat.agg_dist_since_grid_sync[sorted_ix] += norm(displacement)
     end
     for BamA in agents.OMP.BamA
-        displacement = rand(BamA_displacement_dist)
+        displacement = rand(rng, BamA_displacement_dist)
         proposal_dest = mod.(BamA.position + displacement, grid_size.dims)
         BamA.position = proposal_dest
         #put in flat structure too
@@ -659,7 +659,7 @@ function compute_diffusion!(agents::AllAgents, system_flat::AllAgentsFlat, grid_
         system_flat.agg_dist_since_grid_sync[sorted_ix] += norm(displacement)
     end
     for LptD in agents.OMP.LptD
-        displacement = rand(LptD_displacement_dist)
+        displacement = rand(rng, LptD_displacement_dist)
         proposal_dest = mod.(LptD.position + displacement, grid_size.dims)
         if LptD.is_tethered
             if shortest_distance(proposal_dest, LptD.tether_point, grid_size.dims)>params.LptD.tether_radius
@@ -675,13 +675,13 @@ function compute_diffusion!(agents::AllAgents, system_flat::AllAgentsFlat, grid_
     end
     for nascent_OMP in agents.nascent.nascent_OMP
         if nascent_OMP.OMP_type == "OmpA"
-            displacement = rand(OmpA_displacement_dist)
+            displacement = rand(rng, OmpA_displacement_dist)
         elseif nascent_OMP.OMP_type == "OmpCF"
-            displacement = rand(OmpCF_displacement_dist)
+            displacement = rand(rng, OmpCF_displacement_dist)
         elseif nascent_OMP.OMP_type == "BamA"
-            displacement = rand(BamA_displacement_dist)
+            displacement = rand(rng, BamA_displacement_dist)
         elseif nascent_OMP.OMP_type == "LptD"
-            displacement = rand(LptD_displacement_dist)
+            displacement = rand(rng, LptD_displacement_dist)
         else
             error("Nascent OMP type $(nascent_OMP.OMP_type) not recognised.")
         end

@@ -16,7 +16,7 @@ Output:
 )
 
 """
-function initialise_system_cpu(params::AllParams; clear_existing_output::Bool=false, suppress_prints::Bool=false)
+function initialise_system_cpu(params::AllParams; clear_existing_output::Bool=false, suppress_prints::Bool=false, rng::AbstractRNG=Random.default_rng())
 
     # set up output directory structure
     set_up_output_directory(params.system.output_dir; clear_existing_output=clear_existing_output, suppress_prints=suppress_prints)
@@ -26,12 +26,12 @@ function initialise_system_cpu(params::AllParams; clear_existing_output::Bool=fa
         if !suppress_prints
             println("Initialising model with random distribution of agents...")
         end
-        agents, grid_size, grid, system_flat_cpu = initialise_system_random(params; suppress_prints=suppress_prints)
+        agents, grid_size, grid, system_flat_cpu = initialise_system_random(params; suppress_prints=suppress_prints, rng=rng)
     elseif params.init.method == "specify_positions"
         if !suppress_prints
             println("Initialising model with specified agent positions...")
         end
-        agents, grid_size, grid, system_flat_cpu = initialise_system_specify_positions(params; suppress_prints=suppress_prints)
+        agents, grid_size, grid, system_flat_cpu = initialise_system_specify_positions(params; suppress_prints=suppress_prints, rng=rng)
     elseif params.init.method == "from_checkpoint"
         if !suppress_prints
             println("Initialising model by continuing from checkpoint...")
@@ -163,7 +163,7 @@ end
 
 Initialises the AllAgents structure with agents randomly placed within the domain.
 """
-function initialise_agents_random(grid_size::GridSize, params::AllParams)
+function initialise_agents_random(grid_size::GridSize, params::AllParams; rng::AbstractRNG=Random.default_rng())
 
     #initialisation defaults
     init_agent_arrival_time = -Inf     #init objects assumed to have arrived at -Inf
@@ -183,7 +183,7 @@ function initialise_agents_random(grid_size::GridSize, params::AllParams)
     all_OmpAs = [
         OmpAAgent(
             ix + num_agents_allocated_so_far,
-            SVector{2, Float64}(rand() * grid_size.dims[1], rand() * grid_size.dims[2]),
+            SVector{2, Float64}(rand(rng) * grid_size.dims[1], rand(rng) * grid_size.dims[2]),
             init_agent_arrival_time, 
             is_tethered_init, 
             SVector{2, Float64}(tether_point_init, tether_point_init)
@@ -195,7 +195,7 @@ function initialise_agents_random(grid_size::GridSize, params::AllParams)
     all_OmpCFs = [
         OmpCFAgent(
             ix + num_agents_allocated_so_far,
-            SVector{2, Float64}(rand() * grid_size.dims[1], rand() * grid_size.dims[2]),
+            SVector{2, Float64}(rand(rng) * grid_size.dims[1], rand(rng) * grid_size.dims[2]),
             init_agent_arrival_time
         )
         for ix in 1:params.init.num_OmpCF
@@ -205,7 +205,7 @@ function initialise_agents_random(grid_size::GridSize, params::AllParams)
     all_LptDs = [
         LptDAgent(
             ix + num_agents_allocated_so_far,
-            SVector{2, Float64}(rand() * grid_size.dims[1], rand() * grid_size.dims[2]),
+            SVector{2, Float64}(rand(rng) * grid_size.dims[1], rand(rng) * grid_size.dims[2]),
             init_agent_arrival_time, 
             is_tethered_init, 
             SVector{2, Float64}(tether_point_init, tether_point_init), 
@@ -219,7 +219,7 @@ function initialise_agents_random(grid_size::GridSize, params::AllParams)
     all_BamAs = [
         BamAAgent(
             ix + num_agents_allocated_so_far,
-            SVector{2, Float64}(rand() * grid_size.dims[1], rand() * grid_size.dims[2]),
+            SVector{2, Float64}(rand(rng) * grid_size.dims[1], rand(rng) * grid_size.dims[2]),
             init_agent_arrival_time, 
             is_assembled_init, 
             insertion_state_init
@@ -231,7 +231,7 @@ function initialise_agents_random(grid_size::GridSize, params::AllParams)
     all_LPS = [
         LPSAgent(
             ix + num_agents_allocated_so_far,
-            SVector{2, Float64}(rand() * grid_size.dims[1], rand() * grid_size.dims[2]),
+            SVector{2, Float64}(rand(rng) * grid_size.dims[1], rand(rng) * grid_size.dims[2]),
             init_agent_arrival_time
         )
         for ix in 1:params.init.num_LPS
@@ -255,7 +255,7 @@ end
 Initialises the AllAgents structure with agents placed at specified positions within the domain.
 Any positions not specified are randomly assigned.
 """
-function initialise_agents_specify_positions(grid_size::GridSize, params::AllParams)
+function initialise_agents_specify_positions(grid_size::GridSize, params::AllParams; rng::AbstractRNG=Random.default_rng())
 
     #initialisation defaults
     init_agent_arrival_time = -Inf     #init objects assumed to have arrived at -Inf
@@ -308,7 +308,7 @@ function initialise_agents_specify_positions(grid_size::GridSize, params::AllPar
     #helper to get position or random if not specified
     function _get_position_or_random(pos_list::Union{Nothing, Vector{SVector{2, Float64}}}, ix::Int)
         if isnothing(pos_list) || length(pos_list)<ix
-            return SVector{2, Float64}(rand() * grid_size.dims[1], rand() * grid_size.dims[2])
+            return SVector{2, Float64}(rand(rng) * grid_size.dims[1], rand(rng) * grid_size.dims[2])
         else
             return pos_list[ix]
         end
@@ -612,7 +612,7 @@ function run_equilibration!(agents::AllAgents, grid_size::GridSize, grid::SimGri
 
     #run equilibration
     steps_since_grid_sync = 0
-    MAX_STEPS_BETWEEN_GRID_SYNC = 100 #TODO: make adaptive? calibrate?
+    MAX_STEPS_BETWEEN_GRID_SYNC = max_steps_between_grid_sync(params)
     t = 0.0
     time_err = 0.1 * params.system.dt
     while t < equilibration_time - time_err
@@ -722,12 +722,12 @@ end
 Initialises a simulation with agents randomly placed within the domain. Runs equilibration 
 to resolve forces.
 """
-function initialise_system_random(params::AllParams; suppress_prints::Bool=false)
+function initialise_system_random(params::AllParams; suppress_prints::Bool=false, rng::AbstractRNG=Random.default_rng())
 
     #initialise simulation objects
     grid_size, grid = initialise_grid(params)
     system_flat_cpu = initialise_flat_cpu(params)
-    agents = initialise_agents_random(grid_size, params)
+    agents = initialise_agents_random(grid_size, params; rng=rng)
 
     #populate data structures
     rebuild_grid!(grid_size, grid, agents, params.force.sensing_radius)
@@ -759,12 +759,12 @@ end
 
 Initialises a simulation with agents placed at specified positions within the domain.
 """
-function initialise_system_specify_positions(params::AllParams; suppress_prints::Bool=false)
+function initialise_system_specify_positions(params::AllParams; suppress_prints::Bool=false, rng::AbstractRNG=Random.default_rng())
 
     #initialise simulation objects
     grid_size, grid = initialise_grid(params)
     system_flat_cpu = initialise_flat_cpu(params)
-    agents, includes_random_placement = initialise_agents_specify_positions(grid_size, params)
+    agents, includes_random_placement = initialise_agents_specify_positions(grid_size, params; rng=rng)
 
     #populate data structures
     rebuild_grid!(grid_size, grid, agents, params.force.sensing_radius)

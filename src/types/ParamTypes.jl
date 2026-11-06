@@ -144,6 +144,7 @@ struct SystemParams
     max_hole_radius::Union{Nothing, Float64}
     seed::Union{Nothing, Int}
     device::Union{Nothing, String}
+    max_steps_between_grid_sync::Union{Nothing, Int}
 end
 
 """

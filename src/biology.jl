@@ -7,13 +7,13 @@ Updates the BAM subsystem of the system. Specifically, iterates over all (assemb
 for changes in insertion state. If necessary, inserts new nascent objects, or changes fully-inserted nascent 
 objects to full OMP agents. Also updates polypeptide arrivals.
 """
-function update_BAM_subsystem!(agents::AllAgents, grid_size::GridSize, grid::SimGrid, system_flat::AllAgentsFlat, params::AllParams, t::Float64)
+function update_BAM_subsystem!(agents::AllAgents, grid_size::GridSize, grid::SimGrid, system_flat::AllAgentsFlat, params::AllParams, t::Float64; rng::AbstractRNG=Random.default_rng())
 
     #keep track of nascent OMPs to delete after iteration
     nascent_OMP_ixs_to_delete = Int[]
 
     #iterate over BamAs in random order
-    for BamA in sample(agents.OMP.BamA, length(agents.OMP.BamA), replace=false)
+    for BamA in sample(rng, agents.OMP.BamA, length(agents.OMP.BamA), replace=false)
 
         #ignore any unassembled BamAs
         if BamA.is_part_of_assembled_complex
@@ -27,7 +27,7 @@ function update_BAM_subsystem!(agents::AllAgents, grid_size::GridSize, grid::Sim
                 end
 
                 pr_free_to_stalled = 1 - exp(-params.insertion.PP_bind_rate * (agents.num_PP/(prod(grid_size.dims)))*params.system.dt)
-                if rand()<pr_free_to_stalled
+                if rand(rng)<pr_free_to_stalled
                     BamA.insertion_state = "stalled"
                     agents.num_PP -= 1
                 end
@@ -99,7 +99,7 @@ function update_BAM_subsystem!(agents::AllAgents, grid_size::GridSize, grid::Sim
                     #if so, make a new nascent OMP on the edge of the BamA and update this BamA's state
                     if insertion_accepted
                         #make new nascent OMP and update agents and grid structures
-                        generate_nascent_OMP_obj!(agents, grid_size, system_flat, BamA, t, params)
+                        generate_nascent_OMP_obj!(agents, grid_size, system_flat, BamA, t, params; rng=rng)
 
                         #update this BamA too
                         BamA.insertion_state = "embedding"
@@ -246,7 +246,7 @@ function update_BAM_subsystem!(agents::AllAgents, grid_size::GridSize, grid::Sim
 
     #now check for polypeptide arrivals
     PP_arrival_dist = Poisson(params.insertion.PP_arrival_rate * params.system.dt)
-    agents.num_PP += rand(PP_arrival_dist)
+    agents.num_PP += rand(rng, PP_arrival_dist)
 
 end
 
@@ -331,7 +331,7 @@ Given an inserting BamA agent (and other relevant information), generates a new 
 interior of the edge of the BamA and writes the new nascent OMP into the agents structure. Also updates total
 agent count in the grid object.
 """
-function generate_nascent_OMP_obj!(agents::AllAgents, grid_size::GridSize, system_flat::AllAgentsFlat, BamA::BamAAgent, arrival_time::Float64, params::AllParams)
+function generate_nascent_OMP_obj!(agents::AllAgents, grid_size::GridSize, system_flat::AllAgentsFlat, BamA::BamAAgent, arrival_time::Float64, params::AllParams; rng::AbstractRNG=Random.default_rng())
     
     #small perturbation to ensure BamA and its substrate are never in the exact same position (messes up forces)
     insertion_eps = 1e-6
@@ -342,7 +342,7 @@ function generate_nascent_OMP_obj!(agents::AllAgents, grid_size::GridSize, syste
     #decide type
     OMP_types = ["OmpA", "OmpCF", "BamA", "LptD"]
     OMP_weights = [params.OmpA.insertion_prob, params.OmpCF.insertion_prob, params.BamA.insertion_prob, params.LptD.insertion_prob]
-    nascent_OMP_type = sample(OMP_types, ProbabilityWeights(OMP_weights), 1)[1]
+    nascent_OMP_type = sample(rng, OMP_types, ProbabilityWeights(OMP_weights), 1)[1]
 
     #get actual radius
     if nascent_OMP_type=="OmpA"
@@ -362,7 +362,7 @@ function generate_nascent_OMP_obj!(agents::AllAgents, grid_size::GridSize, syste
     ideal_dist_init = max(insertion_eps, params.BamA.radius - effective_rad_init)
 
     #generate random insertion position on the edge of the BAM
-    theta = 2*pi*rand()
+    theta = 2*pi*rand(rng)
     position_init = BamA.position + ideal_dist_init * SVector{2, Float64}(cos(theta), sin(theta))
     position_init = mod.(position_init, grid_size.dims)
 
@@ -396,7 +396,7 @@ Updates the Lpt subsystem of the system. Specifically, iterates over all (assemb
 for changes in insertion state. If necessary, generates new nascent LPS or changes fully-inserted nascent LPS
 agents to full LPS agents. 
 """
-function update_Lpt_subsystem!(agents::AllAgents, grid_size::GridSize, system_flat::AllAgentsFlat, params::AllParams, t::Float64)
+function update_Lpt_subsystem!(agents::AllAgents, grid_size::GridSize, system_flat::AllAgentsFlat, params::AllParams, t::Float64; rng::AbstractRNG=Random.default_rng())
 
     #keep track of nascent LPSs to delete after iteration
     nascent_LPS_ixs_to_delete = Int[]
@@ -410,11 +410,11 @@ function update_Lpt_subsystem!(agents::AllAgents, grid_size::GridSize, system_fl
 
                 #decide if a new LPS is to be inserted
                 LPS_arrival_dist = Poisson(params.LPS.arrival_rate * params.system.dt)
-                insert_new_LPS = (rand(LPS_arrival_dist)>0.0)
+                insert_new_LPS = (rand(rng, LPS_arrival_dist)>0.0)
                 if insert_new_LPS
 
                     #make new nascent OMP and update agents and grid structures
-                    generate_nascent_LPS_obj!(agents, grid_size, LptD, t, params)
+                    generate_nascent_LPS_obj!(agents, grid_size, LptD, t, params; rng=rng)
 
                     #update this LptD too
                     LptD.insertion_state = "embedding"
@@ -495,7 +495,7 @@ Given an inserting LptD agent (and other relevant information), generates a new 
 interior of the edge of the LptD and writes the new nascent LPS into the agents structure. Also updates total
 agent count in the grid object.
 """
-function generate_nascent_LPS_obj!(agents::AllAgents, grid_size::GridSize, LptD::LptDAgent, arrival_time::Float64, params::AllParams)
+function generate_nascent_LPS_obj!(agents::AllAgents, grid_size::GridSize, LptD::LptDAgent, arrival_time::Float64, params::AllParams; rng::AbstractRNG=Random.default_rng())
 
     #NOTE: relies on LPS being smaller than LptD (which it is biologically)
 
@@ -506,7 +506,7 @@ function generate_nascent_LPS_obj!(agents::AllAgents, grid_size::GridSize, LptD:
     ideal_dist_init = params.LptD.radius - params.LPS.radius
 
     #generate position
-    theta = 2*pi*rand()
+    theta = 2*pi*rand(rng)
     position_init = LptD.position + ideal_dist_init * SVector{2, Float64}(cos(theta), sin(theta))
     position_init = mod.(position_init, grid_size.dims)
 
@@ -534,7 +534,7 @@ end
 Iterates through all agents which can be tethered or assembled but haven't been already and checks
 for new tether formation or assembly.
 """
-function update_tethering_and_assembly!(agents::AllAgents, system_flat_cpu::AllAgentsFlat, params::AllParams)
+function update_tethering_and_assembly!(agents::AllAgents, system_flat_cpu::AllAgentsFlat, params::AllParams; rng::AbstractRNG=Random.default_rng())
 
 
     #output initialisation
@@ -548,7 +548,7 @@ function update_tethering_and_assembly!(agents::AllAgents, system_flat_cpu::AllA
     #check OmpAs
     for OmpA in agents.OMP.OmpA
         if !OmpA.is_tethered
-            if rand()<pr_OmpA_tether
+            if rand(rng)<pr_OmpA_tether
                 OmpA.is_tethered = true
                 OmpA.tether_point = OmpA.position
                 #remember this (sorted) ix
@@ -570,7 +570,7 @@ function update_tethering_and_assembly!(agents::AllAgents, system_flat_cpu::AllA
     #check BamAs
     for BamA in agents.OMP.BamA
         if !BamA.is_part_of_assembled_complex
-            if rand()<pr_BamA_assembly
+            if rand(rng)<pr_BamA_assembly
                 BamA.is_part_of_assembled_complex=true
             end
         end
@@ -579,7 +579,7 @@ function update_tethering_and_assembly!(agents::AllAgents, system_flat_cpu::AllA
     #check LptDs
     for LptD in agents.OMP.LptD
         if !LptD.is_part_of_assembled_complex
-            if rand()<pr_LptD_assembly
+            if rand(rng)<pr_LptD_assembly
                 LptD.is_part_of_assembled_complex=true
                 LptD.is_tethered = true
                 LptD.tether_point = LptD.position

@@ -254,3 +254,14 @@ function get_centroid(positions::Vector{SVector{2, Float64}}, dims::SVector{2, F
     end
 
 end
+
+const DEFAULT_MAX_STEPS_BETWEEN_GRID_SYNC = 100 #TODO: make adaptive? calibrate?
+
+"""
+    max_steps_between_grid_sync(params::AllParams)
+
+Number of steps allowed between full grid rebuilds. Read from `system.max_steps_between_grid_sync`
+if given, otherwise defaults to 100. Between rebuilds, the neighbour search widens its window by
+the distance agents have moved since the last rebuild.
+"""
+max_steps_between_grid_sync(params::AllParams) = something(params.system.max_steps_between_grid_sync, DEFAULT_MAX_STEPS_BETWEEN_GRID_SYNC)
