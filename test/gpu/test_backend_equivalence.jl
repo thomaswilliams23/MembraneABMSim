@@ -116,12 +116,10 @@ const F32_POS_TOL = 10 * eps(Float32)
             end
 
             @testset "a new nascent LPS starts at its initial distance from its LptD" begin
-                # Known issue: new nascent agents are placed relative to the inserter's position in
-                # the host structs, which on a GPU are only refreshed when copy_data_to_cpu_yn says
-                # so. That covers a stalled BamA's insertion attempt but not an LptD's LPS arrival,
-                # so a nascent LPS starts offset from its LptD by however far the LptD has moved
-                # since the last copy. Here overlapping LPS push the LptD around with every host
-                # copy suppressed (no output, no insertion attempts, no rebuilds), then an LPS arrives.
+                # New nascent agents are placed relative to the inserter's position in the host
+                # structs, which on a GPU can be stale. Here overlapping LPS push the LptD around
+                # with every host copy suppressed (no output, no insertion attempts, no rebuilds),
+                # then an LPS arrives: it must still start at its initial distance from the LptD.
                 p0 = quiet_params(system=(vis_dt=1e3, max_steps_between_grid_sync=10^6), insertion=(attempt_dt=1e3,))
                 (cpu, ps), (gpu, _) = twin_states(p0, backend; LptD=1, LPS=250)
                 start = only(cpu.agents.OMP.LptD).position
@@ -137,9 +135,9 @@ const F32_POS_TOL = 10 * eps(Float32)
                 run_steps!(cpu, arrive, 1; t0=t)
                 run_steps!(gpu, arrive, 1; t0=t)
                 M.copy_to_host!(gpu)
-                tol = 0.1drift      # one step's growth and motion is far smaller (measured: CPU ~3e-6, GPU ~drift)
+                tol = 0.1drift      # one step's growth and motion is far smaller (measured: CPU ~3e-6, GPU ~1e-6)
                 @test offset_from_start(cpu) < tol
-                @test_broken offset_from_start(gpu) < tol
+                @test offset_from_start(gpu) < tol
             end
         end
     end

@@ -103,13 +103,46 @@ end
 """
     copy_to_host!(state::SimState)
 
-Copies device data back into the CPU structs and flat arrays (no-op on CPU).
+Copies device data back into the CPU structs and flat arrays (no-op on CPU). On a GPU, any
+nascent LPS not yet on the device keeps its offset from its LptD (see
+`keeping_new_nascent_LPS_on_LptD`).
 """
 copy_to_host!(state::SimState{SimBackendCPU}) = nothing
-copy_to_host!(state::SimState{<:SimBackendMetal}) =
+copy_to_host!(state::SimState{<:SimBackendMetal}) = keeping_new_nascent_LPS_on_LptD(state) do
     copy_data_to_cpu_from_metal!(state.flat, state.agents, state.backend.all_data, state.backend.grid_size_dev)
-copy_to_host!(state::SimState{<:SimBackendCUDA}) =
+end
+copy_to_host!(state::SimState{<:SimBackendCUDA}) = keeping_new_nascent_LPS_on_LptD(state) do
     copy_data_to_cpu_from_CUDA!(state.flat, state.agents, state.backend.all_data, state.backend.grid_size_dev)
+end
+
+"""
+    keeping_new_nascent_LPS_on_LptD(copy!::Function, state::SimState)
+
+Runs `copy!` (a device-to-host copy) while keeping each nascent LPS that is not yet on the
+device at the same offset from its LptD. Such an LPS was placed relative to the LptD's host
+position, which on a GPU may be stale until the copy refreshes it.
+"""
+function keeping_new_nascent_LPS_on_LptD(copy!::Function, state::SimState)
+
+    #nascent LPS added since the last copy to the device
+    num_agents_dev = state.backend.grid_size_dev.num_agents
+    new_nascent_LPS = filter(n -> n.index > num_agents_dev, state.agents.nascent.nascent_LPS)
+    if isempty(new_nascent_LPS)
+        return copy!()
+    end
+
+    #record offsets from their LptDs (relative to the stale host positions)
+    dims = state.grid_size.dims
+    find_LptD(n) = state.agents.OMP.LptD[findfirst(l -> l.index == n.inserting_agent_index, state.agents.OMP.LptD)]
+    offsets = [shortest_vec(find_LptD(n).position, n.position, dims) for n in new_nascent_LPS]
+
+    copy!()
+
+    #re-place them relative to the refreshed LptD positions
+    for (n, offset) in zip(new_nascent_LPS, offsets)
+        n.position = mod.(find_LptD(n).position + offset, dims)
+    end
+end
 
 """
     copy_to_device!(state::SimState)
