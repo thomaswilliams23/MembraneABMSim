@@ -36,6 +36,7 @@
         "num_PP": 0,
         "method": "random",
         "equilibration_time": 10,
+        "shrink_to_size": true,
         "complexes_assembled": true
     },
     "insertion": {
@@ -54,7 +55,7 @@
         "mu_attr_OMP_OMP": 0.025,
         "mu_attr_OMP_LPS": 0.025,
         "mu_attr_LPS_LPS": 0.5,
-        "rho": 0.9,
+        "rho": 0.95,
         "max_repulsion": -0.2,
         "k_C": 0.5,
         "eta": 1,
@@ -66,6 +67,7 @@
         "t_max": 1000,
         "vis_dt": 1.0,
         "output_dir": "",
-        "seed": 1
+        "seed": 1,
+        "max_hole_radius": 0.05
     }
 }
