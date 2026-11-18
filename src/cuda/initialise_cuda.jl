@@ -83,7 +83,7 @@ function run_equilibration_CUDA!(agents::AllAgents, grid_size::GridSize, grid::S
 
         
         #report time
-        if abs(t/params.system.vis_dt - round(t/params.system.vis_dt))<time_err
+        if is_interval_step(t, params.system.vis_dt, params.system.dt)
             if !suppress_prints
                 @printf "Running equilibration: τ=%5.2f\r" t
             end

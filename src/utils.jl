@@ -184,32 +184,37 @@ end
 
 
 """
-    copy_data_to_cpu_yn(agents::AllAgents, t::Float64)
+    is_interval_step(t::Float64, interval::Float64, dt::Float64) :: Bool
 
-Decides whether to copy data back to CPU this time step based on agent types and current time.
+True if time `t` falls on a whole multiple of `interval`, for a simulation advancing in steps
+of `dt`. Fires on exactly one step per interval. The interval is rounded to the nearest whole
+number of steps (at least 1).
+"""
+@inline function is_interval_step(t::Float64, interval::Float64, dt::Float64)
+    step = round(Int, t / dt)
+    steps_per_interval = max(1, round(Int, interval / dt))
+    return mod(step, steps_per_interval) == 0
+end
+
+
+
+"""
+    copy_data_to_cpu_yn(BamA_agents::Vector{BamAAgent}, params::AllParams, t::Float64)
+
+Decides whether to copy data back from the GPU to the CPU this time step: true if the next
+step writes visualisation output, or if a stalled BamA will attempt insertion on the next step.
 """
 function copy_data_to_cpu_yn(BamA_agents::Vector{BamAAgent}, params::AllParams, t::Float64)
 
-    t_next_time_step = t + params.system.dt
+    dt = params.system.dt
+    t_next = t + dt
 
-    #first check if there is a BamA in the stalled state, and we will attempt insertion on the next time step
-    attempt_dt_err = 0.1 * params.system.dt
-    if abs(t_next_time_step/params.insertion.attempt_dt - round(t_next_time_step/params.insertion.attempt_dt))<attempt_dt_err
-        for BamA in BamA_agents
-            if BamA.insertion_state == "stalled"
-                return true
-            end
-        end
-    end
+    #visualisation output on the next step
+    is_interval_step(t_next, params.system.vis_dt, dt) && return true
 
-    #next check if we need to copy data out for visualisation this time step
-    time_err = 0.1 * params.system.dt
-    if abs(t_next_time_step/params.system.vis_dt - round(t_next_time_step/params.system.vis_dt))<time_err
-        return true
-    end
-
-    return false
-
+    #a stalled BamA will attempt insertion on the next step
+    return is_interval_step(t_next, params.insertion.attempt_dt, dt) &&
+           any(BamA -> BamA.insertion_state == "stalled", BamA_agents)
 end
 
 
