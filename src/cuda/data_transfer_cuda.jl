@@ -16,6 +16,9 @@ function update_nascent_promotion_CUDA!(all_data_CUDA::AllDataCUDA, system_flat_
     #update identifiers
     copyto!(all_data_CUDA.identifiers, system_flat_cpu.identifiers[1:grid_size.num_agents])
 
+    #update effective radii (promoted agents are set to their full size)
+    copyto!(all_data_CUDA.effective_radii, system_flat_cpu.effective_radii[1:grid_size.num_agents])
+
     #reset nascent_promoted flag
     grid_size.nascent_promoted = false
 end

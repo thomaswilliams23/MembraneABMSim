@@ -16,6 +16,9 @@ function update_nascent_promotion_metal!(all_data_metal::AllDataMetal, system_fl
     #update identifiers
     copyto!(all_data_metal.identifiers, system_flat_cpu.identifiers[1:grid_size.num_agents])
 
+    #update effective radii (promoted agents are set to their full size)
+    copyto!(all_data_metal.effective_radii, system_flat_cpu.effective_radii[1:grid_size.num_agents])
+
     #reset nascent_promoted flag
     grid_size.nascent_promoted = false
 end

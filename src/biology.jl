@@ -115,18 +115,19 @@ function update_BAM_subsystem!(agents::AllAgents, grid_size::GridSize, grid::Sim
 
                     if nascent_OMP.inserting_agent_index == BamA.index
 
-                        #find this agent's insertion time
+                        #find this agent's final radius and insertion time
                         if nascent_OMP.OMP_type=="OmpA"
-                            insertion_time = params.OmpA.radius/params.insertion.OMP_assembly_rate
+                            final_radius = params.OmpA.radius
                         elseif nascent_OMP.OMP_type=="OmpCF"
-                            insertion_time = params.OmpCF.radius/params.insertion.OMP_assembly_rate
+                            final_radius = params.OmpCF.radius
                         elseif nascent_OMP.OMP_type=="BamA"
-                            insertion_time = params.BamA.radius/params.insertion.OMP_assembly_rate
+                            final_radius = params.BamA.radius
                         elseif nascent_OMP.OMP_type=="LptD"
-                            insertion_time = params.LptD.radius/params.insertion.OMP_assembly_rate
+                            final_radius = params.LptD.radius
                         else
                             error("OMP type $(nascent_OMP.OMP_type) not recognised.")
                         end
+                        insertion_time = final_radius/params.insertion.OMP_assembly_rate
 
                         #check if ready to promote to full agent
                         time_err = 1e-6
@@ -209,6 +210,10 @@ function update_BAM_subsystem!(agents::AllAgents, grid_size::GridSize, grid::Sim
                             else
                                 error("OMP type $(nascent_OMP.OMP_type) not recognised.")
                             end
+
+                            #set its full radius in the flat data (growth can stop just short of it if
+                            #the insertion time is not a whole number of steps)
+                            system_flat.effective_radii[sorted_ix] = final_radius
 
                             #update the BamA
                             BamA.insertion_state = "free"
@@ -366,13 +371,17 @@ function generate_nascent_OMP_obj!(agents::AllAgents, grid_size::GridSize, syste
     position_init = BamA.position + ideal_dist_init * SVector{2, Float64}(cos(theta), sin(theta))
     position_init = mod.(position_init, grid_size.dims)
 
+    #start one growth step back: nascent agents also grow in the step they are created
+    effective_rad_incs, ideal_dist_incs = compute_nascent_incs(params)
+    agent_type_num = Dict("OmpA" => 1, "OmpCF" => 3, "BamA" => 5, "LptD" => 7)[nascent_OMP_type]
+
     #create the nascent OMP
     new_nascent_OMP = NascentOMPAgent(
         new_nascent_OMP_ix,
         position_init,
         arrival_time,
-        effective_rad_init,
-        ideal_dist_init,
+        effective_rad_init - effective_rad_incs[agent_type_num],
+        ideal_dist_init - ideal_dist_incs[agent_type_num],
         nascent_OMP_type,
         BamA.index
     )
@@ -510,12 +519,16 @@ function generate_nascent_LPS_obj!(agents::AllAgents, grid_size::GridSize, LptD:
     position_init = LptD.position + ideal_dist_init * SVector{2, Float64}(cos(theta), sin(theta))
     position_init = mod.(position_init, grid_size.dims)
 
+    #start one growth step back: nascent agents also grow in the step they are created
+    LPS_agent_type_num = 2  #LPS is always type 2 in the increments vectors
+    _, ideal_dist_incs = compute_nascent_incs(params)
+
     #make new nascent LPS objects
     new_nascent_LPS = NascentLPSAgent(
         new_nascent_LPS_ix,
         position_init,
         arrival_time,
-        ideal_dist_init,
+        ideal_dist_init - ideal_dist_incs[LPS_agent_type_num],
         LptD.index
     )
 
