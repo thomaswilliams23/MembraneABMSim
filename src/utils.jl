@@ -15,6 +15,34 @@ end
 
 
 """
+    keeping_new_nascent_LPS_on_LptD(copy!::Function, agents::AllAgents, dims::SVector{2, Float64}, num_agents_dev::Int)
+
+Runs `copy!` (a GPU-to-CPU copy) while keeping each nascent LPS that is not yet on the
+device at the same offset from its LptD. Such an LPS was placed relative to the LptD's host
+position, which on a GPU may be stale until the copy refreshes it.
+"""
+function keeping_new_nascent_LPS_on_LptD(copy!::Function, agents::AllAgents, dims::SVector{2, Float64}, num_agents_dev::Int)
+
+    #nascent LPS added since the last copy to the device
+    new_nascent_LPS = filter(n -> n.index > num_agents_dev, agents.nascent.nascent_LPS)
+    if isempty(new_nascent_LPS)
+        return copy!()
+    end
+
+    #record offsets from their LptDs (relative to the stale host positions)
+    find_LptD(n) = agents.OMP.LptD[findfirst(l -> l.index == n.inserting_agent_index, agents.OMP.LptD)]
+    offsets = [shortest_vec(find_LptD(n).position, n.position, dims) for n in new_nascent_LPS]
+
+    copy!()
+
+    #re-place them relative to the refreshed LptD positions
+    for (n, offset) in zip(new_nascent_LPS, offsets)
+        n.position = mod.(find_LptD(n).position + offset, dims)
+    end
+end
+
+
+"""
     shortest_distance(P1::SVector{2, Float64}, P2::SVector{2, Float64}, dims::SVector{2, Float64})
 
 Simple helper function to calculate the shortest distance between P1 and P2 on a 2D 
