@@ -542,8 +542,8 @@ as they are inserted.
 """
 function compute_nascent_incs(params::AllParams)
     #initialise
-    effective_rad_incs = Vector{Float64}(undef, 7)
-    ideal_dist_incs = Vector{Float64}(undef, 7)
+    effective_rad_incs = zeros(Float64, 7)
+    ideal_dist_incs = zeros(Float64, 7)
 
     #maps
     agent_type_to_num = Dict(

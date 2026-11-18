@@ -196,6 +196,7 @@ function initialise_system_random_metal(force_kernel, params::AllParams; suppres
     rebuild_grid!(grid_size, grid, agents, params.force.sensing_radius)
     compile_flat_system_data_cpu!(system_flat_cpu, agents, grid_size, grid, params)
     put_grid_in_sorted_order!(grid_size, grid, system_flat_cpu)
+    grid_size.num_agents_changed = false
 
     #copy data to metal GPU
     copy_data_to_metal!(all_data_metal, grid_size_metal, system_flat_cpu, grid_size, grid)
