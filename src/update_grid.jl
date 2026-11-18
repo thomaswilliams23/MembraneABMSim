@@ -157,6 +157,9 @@ function apply_scale_factor!(agents::AllAgents, system_flat::AllAgentsFlat, grid
     #update dims
     grid_size.dims *= scale_factor
 
+    #offsets from the (rescaled) grid cells scale too, so scale the neighbour-search margin with them
+    system_flat.agg_dist_since_grid_sync .*= scale_factor
+
     #if we are shrinking the domain, we also need to mod the tether points to ensure they are still within the domain
     if scale_factor<1.0
         for tethered_agent in Iterators.flatten((agents.OMP.OmpA, agents.OMP.LptD))

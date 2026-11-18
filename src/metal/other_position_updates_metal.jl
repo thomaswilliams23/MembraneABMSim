@@ -60,6 +60,7 @@ function compute_non_force_position_changes_metal!(
         all_data_metal.effective_radii,
         all_data_metal.identifiers,
         all_data_metal.tether_points,
+        all_data_metal.agg_dist_since_grid_sync,
         all_data_metal.substrate_inserting_ideal_dists,
         all_data_metal.newly_tethered_agent_ixs,
         grid_size_metal.dims,
@@ -86,6 +87,7 @@ end
         effective_radii::MtlDeviceVector{Float32},
         identifiers::MtlDeviceVector{Int},
         tether_points::MtlDeviceVector{Float32},
+        agg_dist_since_grid_sync::MtlDeviceVector{Float32},
         substrate_inserting_ideal_dists::MtlDeviceVector{Float32},
         newly_tethered_agent_ixs::MtlDeviceVector{Int},
         dims::SVector{2, Float32},
@@ -103,6 +105,7 @@ Metal GPU kernel for computing non-force position changes.
     effective_radii::MtlDeviceVector{Float32},
     identifiers::MtlDeviceVector{Int},
     tether_points::MtlDeviceVector{Float32},
+    agg_dist_since_grid_sync::MtlDeviceVector{Float32},
     substrate_inserting_ideal_dists::MtlDeviceVector{Float32},
     newly_tethered_agent_ixs::MtlDeviceVector{Int},
     dims::SVector{2, Float32},
@@ -159,6 +162,8 @@ Metal GPU kernel for computing non-force position changes.
             tether_points[2*sorted_ix-1] = new_tether_pos[1]
             tether_points[2*sorted_ix] = new_tether_pos[2]
         end
+        # offsets from the (rescaled) grid cells scale too, so scale the neighbour-search margin with them
+        agg_dist_since_grid_sync[sorted_ix] *= scale_factor
     end
 
 end
