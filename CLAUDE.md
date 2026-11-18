@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-MembraneABMSim is an unregistered Julia package (Julia 1.12): a 2D agent-based model of the Gram-negative outer membrane. Agents are OMPs (OmpA, OmpCF, BamA, LptD) and LPS discs on a periodic domain. They interact through pairwise attraction-repulsion forces, and the membrane grows as BamA inserts new OMPs and LptD inserts new LPS.
+MembraneABMSim is an unregistered Julia package (Julia 1.13): a 2D agent-based model of the Gram-negative outer membrane. Agents are OMPs (OmpA, OmpCF, BamA, LptD) and LPS discs on a periodic domain. They interact through pairwise attraction-repulsion forces, and the membrane grows as BamA inserts new OMPs and LptD inserts new LPS.
 
 ## Commands
 
