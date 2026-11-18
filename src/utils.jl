@@ -72,6 +72,7 @@ function exposed_area(rad_ins::Float64, rad_sub::Float64, dist::Float64)
 
     dist_err = 1e-6
     if dist<dist_err
+        @assert rad_ins > 0.9*rad_sub "Inserting agent radius $(rad_ins) must be larger than substrate agent radius $(rad_sub) for insertion to occur!"
         return 0.0
     end
 
