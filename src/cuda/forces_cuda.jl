@@ -13,7 +13,7 @@ function resolve_forces_CUDA!(force_kernel, all_data_CUDA::AllDataCUDA, grid_siz
 
     #some calculations needed for kernel
     max_effective_radius = Float32(max(params_CUDA.OmpA_radius, params_CUDA.OmpCF_radius, params_CUDA.LptD_radius, params_CUDA.BamA_radius, params_CUDA.LPS_radius))
-    max_agg_dist = maximum(all_data_CUDA.agg_dist_since_grid_sync)
+    max_agg_dist = maximum(view(all_data_CUDA.agg_dist_since_grid_sync, 1:grid_size_CUDA.num_agents))
 
     #run the force kernel
     force_kernel(
