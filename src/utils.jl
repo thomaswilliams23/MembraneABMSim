@@ -28,20 +28,20 @@ end
 """
     build_dense_morton(num_cells::SVector{2, Int})
 
-Precompute dense Morton mappings for a grid.
+Precompute dense Morton mappings for a grid with `num_cells[1]` cells in x and `num_cells[2]` in y.
 Returns two vectors:
-- coords_to_z_ix[(y-1)*cols + x] = (dense) Morton index
+- coords_to_z_ix[(y-1)*num_cells[1] + x] = (dense) Morton index
 - z_ix_to_coords[(2*dense-1):(2*dense)] = x, y coords
 """
 function build_dense_morton(num_cells::SVector{2, Int})
 
     #unpack
-    rows = num_cells[1]
-    cols = num_cells[2]
-    tot_cells = rows*cols
+    nx = num_cells[1]
+    ny = num_cells[2]
+    tot_cells = nx*ny
 
     #generate coords, sort by (actual) Morton
-    coords = [(x,y) for y in 1:rows for x in 1:cols]
+    coords = [(x,y) for y in 1:ny for x in 1:nx]
     sort!(coords, by = c -> cartesian2morton([c[1], c[2]]))
 
     #initialise output vectors
@@ -50,7 +50,7 @@ function build_dense_morton(num_cells::SVector{2, Int})
 
     #build mappings
     for (dense, (x,y)) in enumerate(coords)
-        coords_to_z_ix[(y-1)*cols + x] = dense
+        coords_to_z_ix[(y-1)*nx + x] = dense
         z_ix_to_coords[2*dense-1] = x
         z_ix_to_coords[2*dense] = y
     end
