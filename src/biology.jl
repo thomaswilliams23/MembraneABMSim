@@ -563,6 +563,9 @@ function update_tethering_and_assembly!(agents::AllAgents, system_flat_cpu::AllA
                     is_nascent=false,
                     nascent_ix=0
                 )
+                #record the tether point in the flat structure
+                system_flat_cpu.tether_points[2*sorted_ix-1] = OmpA.tether_point[1]
+                system_flat_cpu.tether_points[2*sorted_ix] = OmpA.tether_point[2]
             end
         end
     end
@@ -595,6 +598,9 @@ function update_tethering_and_assembly!(agents::AllAgents, system_flat_cpu::AllA
                     is_nascent=false,
                     nascent_ix=0
                 )
+                #record the tether point in the flat structure
+                system_flat_cpu.tether_points[2*sorted_ix-1] = LptD.tether_point[1]
+                system_flat_cpu.tether_points[2*sorted_ix] = LptD.tether_point[2]
             end
         end
     end
